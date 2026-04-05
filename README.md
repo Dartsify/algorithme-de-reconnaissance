@@ -1,10 +1,17 @@
-# Algorithme-de-Reconnaissance
+# Algorithme-de-Reconnaissance <!-- omit in toc -->
 
 Algorithme de reconnaissance stocké sur une Raspberry Pi pour le projet Dartsify
 
 > Notes de Mathias - Dimanche 5 avril 2026
 
-## Table des Matières
+## Table des Matières <!-- omit in toc -->
+
+- [Notes sur la Raspberry Pi](#notes-sur-la-raspberry-pi)
+  - [Connexion à la Raspberry](#connexion-à-la-raspberry)
+    - [Cable Ethernet Raspberry - Box WiFi](#cable-ethernet-raspberry---box-wifi)
+    - [Cable Ethernet Raspberry - Ordinateur](#cable-ethernet-raspberry---ordinateur)
+    - [WiFi](#wifi)
+  - [Éteindre la Raspberry](#éteindre-la-raspberry)
 
 ## Notes sur la Raspberry Pi
 
