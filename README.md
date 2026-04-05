@@ -47,6 +47,8 @@ Pour être 100% sans fil, nous pouvons simplement connecter la Raspberry au WiFi
   > N.B. : Alexandre a essayé mais n'a pas réussi à faire fonctionner cette technique, c'est pourquoi j'ai trouvé un autre moyen de le faire.
 - Utiliser l'interface graphique :
   Cette interface graphique était déjà installée sur la Raspberry. En utilisant la seconde méthode consistant à brancher un cable Ethernet entre la Raspberry et l'ordinateur personnel (afin de délivrer du réseau à la Raspberry, la première méthode étant évidemment aussi possible) et en se dirigeant vers le portail **Raspberry Pi Connect**, nous pouvons, après avoir connecté la Raspberry au compte déjà créé dans le portail, accéder à l'interface graphique de la Raspberry. Dès lors, nous sommes capable de fournir les informations de connexion au réseau WiFi sans fil.
+  [Doc officielle](https://www.raspberrypi.com/documentation/services/connect.html)
+  ![doc officielle](doc_raspberry.png "Commandes de la doc officielle")
   > N.B. : La connexion sera évidemment momentanément coupée, mais après quelques secondes nous pouvons faire la même opération afin de se connecter soit via le portail (en se dirigeant cette fois vers le terminal et non l'interface graphique) soit dans un terminal via ssh.
 
 ### Éteindre la Raspberry
