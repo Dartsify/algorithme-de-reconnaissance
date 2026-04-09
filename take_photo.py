@@ -11,17 +11,17 @@ DATASET_DIR.mkdir(parents=True, exist_ok=True)
 
 # Définir les caméras par son numéro d'index
 
-# 3 -> cam 1
+# 3 -> cam 3
 cam1 = cv2.VideoCapture(3)
 if not cam1.isOpened():
 	exit("Erreur: Impossible d'ouvrir la caméra1")
 
-# 0 -> cam 2
+# 0 -> cam 1
 cam2 = cv2.VideoCapture(0)
 if not cam2.isOpened():
 	exit("Erreur: Impossible d'ouvrir la caméra2")
 
-# 1 -> cam 3
+# 1 -> cam 2
 cam3 = cv2.VideoCapture(1)
 if not cam3.isOpened():
 	exit("Erreur: Impossible d'ouvrir la caméra3")
@@ -74,14 +74,15 @@ while True:
 	# Appuyer sur ESPACE pour enregistrer la capture
 	if key == 32:  # 32 est le code ASCII pour ESPACE
 		ts = datetime.now().strftime('%d%m%y_%H%M%S')
-		ok1 = cv2.imwrite(str(DATASET_DIR / f'cam1_{ts}.jpg'), frame1)
-		ok2 = cv2.imwrite(str(DATASET_DIR / f'cam2_{ts}.jpg'), frame2)
-		ok3 = cv2.imwrite(str(DATASET_DIR / f'cam3_{ts}.jpg'), frame3)
+		ok1 = cv2.imwrite(str(DATASET_DIR / f'cam3_{ts}.jpg'), frame1)
+		ok2 = cv2.imwrite(str(DATASET_DIR / f'cam1_{ts}.jpg'), frame2)
+		ok3 = cv2.imwrite(str(DATASET_DIR / f'cam2_{ts}.jpg'), frame3)
 
 		if not (ok1 and ok2 and ok3):
 			print("Erreur: échec d'enregistrement (cv2.imwrite a renvoyé False).")
 		else:
 			print(f"{message[randint(0, len(message)-1)]}")
+			print(f'Nombre d\'images dans le dataset: {len(list(DATASET_DIR.glob("*.jpg")))}')
 
 	# Appuyer sur ESC pour arrêter la capture
 	if key == 27:  # 27 est le code ASCII pour ESC
