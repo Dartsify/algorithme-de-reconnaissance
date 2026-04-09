@@ -106,7 +106,7 @@ def main() -> None:
 
 	
 	# findHomography cherche la matrice H qui vérifie, pour chaque point source
-	# (x,y), la relation suivante : (x,y)' ~ H . (x,y).
+	# (x,y), la relation suivante : (x,y)' ~ H (x,y).
 	# Le symbole ~ signifie "égal à un facteur d'échelle près".
 	homography_matrix, _ = cv2.findHomography(pts_src, pts_dst)
 
@@ -126,7 +126,8 @@ def main() -> None:
 	test_point_camera = np.array([[[394.9, 768.9]]], dtype=np.float32)
 	# On applique la transformation d'homographie au point test (ici sur un seul point)
 	transformed_point = cv2.perspectiveTransform(test_point_camera, homography_matrix)
-
+	# Point transformé brut (format homogène) : [[[x' y']]]
+	
 	transformed_x = float(transformed_point[0, 0, 0])
 	transformed_y = float(transformed_point[0, 0, 1])
 
@@ -139,12 +140,12 @@ def main() -> None:
 	# warpPerspective applique H à tous les pixels de l'image avec caméra inclinée.
 	# On obtient alors une image rectifiée, comme si la caméra regardait la
 	# cible parfaitement de face.
-	reference_height, reference_width = reference_image.shape[:2]
+	camera_image_height, camera_image_width = camera_image.shape[:2]
 	# On applique la transformation d'homographie à l'image entière pour obtenir une image corrigée. (ici sur tous les points de l'image)
 	corrected_image = cv2.warpPerspective(
 		camera_image,
 		homography_matrix,
-		(reference_width, reference_height),
+		(camera_image_width, camera_image_height),
 	)
 
 	# -------------------------------------------------------------------------
@@ -161,16 +162,21 @@ def main() -> None:
 	# Visualisation des résultats
 
 	# (pas obligatoire) mais je resize les images pour qu'elles tiennent mieux à l'écran
-	rz_camera_image_with_points = cv2.resize(camera_image_with_points, (500, 500))
-	rz_reference_image_with_points = cv2.resize(reference_image_with_points, (500, 500))
-	rz_corrected_image = cv2.resize(corrected_image, (500, 500))
+	WIDTH_RESIZE, HEIGHT_RESIZE = 500, 500
+	rz_camera_image_with_points = cv2.resize(camera_image_with_points, (WIDTH_RESIZE, HEIGHT_RESIZE))
+	# rz_reference_image_with_points = cv2.resize(reference_image_with_points, (WIDTH_RESIZE, HEIGHT_RESIZE))
+	rz_corrected_image = cv2.resize(corrected_image, (WIDTH_RESIZE, HEIGHT_RESIZE))
+
+	# enregistre l'image corrigée pour pouvoir la comparer avec les résultats du modèle IA
+	# cv2.imwrite(str(base_dir / "image_cam2_corrigee500x500.jpeg"), rz_corrected_image)
 
 	cv2.imshow("Image originale - camera inclinee", rz_camera_image_with_points)
-	cv2.imshow("Image de reference", rz_reference_image_with_points)
+	# cv2.imshow("Image de reference", rz_reference_image_with_points)
 	# cv2.imshow("Image corrigee", rz_corrected_image)
 	plt.title("Image corrigée (homographie)")
 	plt.imshow(cv2.cvtColor(rz_corrected_image, cv2.COLOR_BGR2RGB))
-	plt.show()
+	plt.show(block=False)
+	plt.pause(0.001)
 
 	print("\nAppuyez sur n'importe quelle touche pour arrêter le programme.")
 	cv2.waitKey(0)
