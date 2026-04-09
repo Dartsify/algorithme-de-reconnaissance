@@ -149,14 +149,20 @@ def main() -> None:
 	)
 
 	# -------------------------------------------------------------------------
-	# Affichage des points choisis
+	# Affichage des points choisis + sauvegarde des images traçage des points
 	# Cela permet de contrôler visuellement que les correspondances sont bien
 	# placées sur les numéros choisis.
 	camera_image_with_points = draw_points(camera_image, pts_src, ["9", "7", "15", "18"])
 	camera_image_with_points = draw_points(camera_image_with_points,test_point_camera.reshape(1, 2),["Point test"])
+	# cv2.imwrite(str(base_dir / "image_camera2_with_points.jpeg"), camera_image_with_points)
 
 	reference_image_with_points = draw_points(reference_image, pts_dst, ["9", "7", "15", "18"])
+	# cv2.imwrite(str(base_dir / "image_reference_with_points.jpeg"), reference_image_with_points)
+
+	# enregistre l'image corrigée pour pouvoir la comparer avec les résultats du modèle IA
 	corrected_image = draw_points(corrected_image,transformed_point.reshape(1, 2),["Point test corrigé"])
+
+
 
 	# -------------------------------------------------------------------------
 	# Visualisation des résultats
@@ -164,14 +170,13 @@ def main() -> None:
 	# (pas obligatoire) mais je resize les images pour qu'elles tiennent mieux à l'écran
 	WIDTH_RESIZE, HEIGHT_RESIZE = 500, 500
 	rz_camera_image_with_points = cv2.resize(camera_image_with_points, (WIDTH_RESIZE, HEIGHT_RESIZE))
-	# rz_reference_image_with_points = cv2.resize(reference_image_with_points, (WIDTH_RESIZE, HEIGHT_RESIZE))
+	rz_reference_image_with_points = cv2.resize(reference_image_with_points, (WIDTH_RESIZE, HEIGHT_RESIZE))
 	rz_corrected_image = cv2.resize(corrected_image, (WIDTH_RESIZE, HEIGHT_RESIZE))
 
-	# enregistre l'image corrigée pour pouvoir la comparer avec les résultats du modèle IA
 	# cv2.imwrite(str(base_dir / "image_cam2_corrigee500x500.jpeg"), rz_corrected_image)
 
 	cv2.imshow("Image originale - camera inclinee", rz_camera_image_with_points)
-	# cv2.imshow("Image de reference", rz_reference_image_with_points)
+	cv2.imshow("Image de reference", rz_reference_image_with_points)
 	# cv2.imshow("Image corrigee", rz_corrected_image)
 	plt.title("Image corrigée (homographie)")
 	plt.imshow(cv2.cvtColor(rz_corrected_image, cv2.COLOR_BGR2RGB))
