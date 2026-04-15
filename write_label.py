@@ -8,8 +8,8 @@ Le fichier CSV aura deux colonnes : "ID" pour le nom de l'image et "Label" pour 
 """
 
 ROOT = Path(__file__).resolve().parent
-DATASET_DIR = ROOT / "Dartsify" / "dataset"
-CSV_PATH = ROOT / "Dartsify" / "label.csv"
+DATASET_DIR = ROOT / "image_test" / "homographie"
+CSV_PATH = ROOT / "image_test" /  "homographie" / "label.csv"
 
 
 def main() -> None:

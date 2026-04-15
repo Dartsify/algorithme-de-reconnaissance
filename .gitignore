@@ -204,6 +204,10 @@ cython_debug/
 .cursorignore
 .cursorindexingignore
 
+# Large local model artifacts
+dartsify_ai.pkl
+dartsify_aimodel_with_weights.pth
+
 # Marimo
 marimo/_static/
 marimo/_lsp/

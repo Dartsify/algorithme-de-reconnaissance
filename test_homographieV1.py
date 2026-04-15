@@ -39,9 +39,9 @@ def draw_points(image: np.ndarray, points: np.ndarray, labels: list[str]) -> np.
 def main() -> None:
 	# On utilise Path(__file__) pour construire des chemins relatifs au script.
 	# Cela évite les problèmes de chemins absolus quand le projet est déplacé.
-	base_dir = Path(__file__).parent / "image_test"
-	camera_image_path = base_dir / "image_camera2_inclinee.jpeg"
-	reference_image_path = base_dir / "image_reference.jpeg"
+	base_dir = Path(__file__).parent / "image_test" / "homographie"
+	camera_image_path = base_dir / "cam1_reference.jpg"
+	reference_image_path = base_dir / "cam_reference_general.jpg"
 
 	if not camera_image_path.exists():
 		raise FileNotFoundError(
@@ -79,10 +79,26 @@ def main() -> None:
 	# pts_src contient les points mesurés dans l'image avec caméra inclinée. [x,y]
 	pts_src = np.array(
 		[
-			[65.9, 674.7],  # coordonnées du point sur le bord supérieur du nombre visible 7 dans l'image avec caméra inclinée
-			[583.9, 374.3],  # coordonnées du point sur le bord supérieur du nombre visible 9 dans l'image avec caméra inclinée
-			[563.8, 1204.6],  # coordonnées du point sur le bord supérieur du nombre visible 15 dans l'image avec caméra inclinée
-			[1087.7, 690.3],  # coordonnées du point sur le bord supérieur du nombre visible 18 dans l'image avec caméra inclinée
+			[396.9, 584.1],  # coordonnées du point sur le bord supérieur du nombre visible 1 dans l'image avec caméra inclinée
+			[269.0, 515.0],  # coordonnées du point sur le bord supérieur du nombre visible 18 dans l'image avec caméra inclinée
+			[191.7, 417.9],  # coordonnées du point sur le bord supérieur du nombre visible 4 dans l'image avec caméra inclinée
+			[181.9, 334.4],  # coordonnées du point sur le bord supérieur du nombre visible 13 dans l'image avec caméra inclinée
+			[209.5, 256.8],  # coordonnées du point sur le bord supérieur du nombre visible 6 dans l'image avec caméra inclinée
+			[272.7, 192.8],  # coordonnées du point sur le bord supérieur du nombre visible 10 dans l'image avec caméra inclinée
+			[345.6, 149.8],  # coordonnées du point sur le bord supérieur du nombre visible 15 dans l'image avec caméra inclinée
+			[419.2, 121.1],  # coordonnées du point sur le bord supérieur du nombre visible 2 dans l'image avec caméra inclinée
+			[508.3, 101.7],  # coordonnées du point sur le bord supérieur du nombre visible 17 dans l'image avec caméra inclinée
+			[587.5, 95.5],  # coordonnées du point sur le bord supérieur du nombre visible 3 dans l'image avec caméra inclinée
+			[673.9, 100.9],  # coordonnées du point sur le bord supérieur du nombre visible 16 dans l'image avec caméra inclinée
+			[755.1,116.4],  # coordonnées du point sur le bord supérieur du nombre visible 7 dans l'image avec caméra inclinée
+			[834.6, 145.7],  # coordonnées du point sur le bord supérieur du nombre visible 19 dans l'image avec caméra inclinée
+			[906.5, 187.6],  # coordonnées du point sur le bord supérieur du nombre visible 8 dans l'image avec caméra inclinée
+			[962.3, 245.3],  # coordonnées du point sur le bord supérieur du nombre visible 11 dans l'image avec caméra inclinée
+			[994.6, 323.9],  # coordonnées du point sur le bord supérieur du nombre visible 14 dans l'image avec caméra inclinée
+			[982.2, 409.6],  # coordonnées du point sur le bord supérieur du nombre visible 9 dans l'image avec caméra inclinée
+			[910.7, 504.9],  # coordonnées du point sur le bord supérieur du nombre visible 12 dans l'image avec caméra inclinée
+			[771.1, 578.5],  # coordonnées du point sur le bord supérieur du nombre visible 5 dans l'image avec caméra inclinée
+			[588.0, 611.6],  # coordonnées du point sur le bord supérieur du nombre visible 20 dans l'image avec caméra inclinée
 		],
 		dtype=np.float32,
 	)
@@ -90,10 +106,26 @@ def main() -> None:
 	# pts_dst contient les points exactement correspondants dans la vue de face.
 	pts_dst = np.array(
 		[
+			[244.4, 1167.9],  # position du point sur le bord supérieur du nombre visible 1 dans l'image de référence
+			[244.4, 1167.9],  # position du point sur le bord supérieur du nombre visible 18 dans l'image de référence
+			[244.4, 1167.9],  # position du point sur le bord supérieur du nombre visible 4 dans l'image de référence
+			[244.4, 1167.9],  # position du point sur le bord supérieur du nombre visible 13 dans l'image de référence
+			[244.4, 1167.9],  # position du point sur le bord supérieur du nombre visible 6 dans l'image de référence
+			[244.4, 1167.9],  # position du point sur le bord supérieur du nombre visible 10 dans l'image de référence
+			[244.4, 1167.9],  # position du point sur le bord supérieur du nombre visible 15 dans l'image de référence
+			[244.4, 1167.9],  # position du point sur le bord supérieur du nombre visible 2 dans l'image de référence
+			[244.4, 1167.9],  # position du point sur le bord supérieur du nombre visible 17 dans l'image de référence
+			[244.4, 1167.9],  # position du point sur le bord supérieur du nombre visible 3 dans l'image de référence
+			[244.4, 1167.9],  # position du point sur le bord supérieur du nombre visible 16 dans l'image de référence
 			[244.4, 1167.9],  # position du point sur le bord supérieur du nombre visible 7 dans l'image de référence
-			[166.4, 415.0],  # position du point sur le bord supérieur du nombre visible 9 dans l'image de référence
-			[1013.6, 1057.7],  # position du point sur le bord supérieur du nombre visible 15 dans l'image de référence
-			[888.4, 316.3],  # position du point sur le bord supérieur du nombre visible 18 dans l'image de référence
+			[244.4, 1167.9],  # position du point sur le bord supérieur du nombre visible 19 dans l'image de référence
+			[244.4, 1167.9],  # position du point sur le bord supérieur du nombre visible 8 dans l'image de référence
+			[244.4, 1167.9],  # position du point sur le bord supérieur du nombre visible 11 dans l'image de référence
+			[244.4, 1167.9],  # position du point sur le bord supérieur du nombre visible 14 dans l'image de référence
+			[244.4, 1167.9],  # position du point sur le bord supérieur du nombre visible 9 dans l'image de référence
+			[244.4, 1167.9],  # position du point sur le bord supérieur du nombre visible 12 dans l'image de référence
+			[244.4, 1167.9],  # position du point sur le bord supérieur du nombre visible 5 dans l'image de référence
+			[166.4, 415.0],  # position du point sur le bord supérieur du nombre visible 20 dans l'image de référence
 		],
 		dtype=np.float32,
 	)

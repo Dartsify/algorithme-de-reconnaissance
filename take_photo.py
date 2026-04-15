@@ -6,13 +6,13 @@ from random import randint
 
 message = ["Bien joué !!!!!!!", "Allez ! Encore quelques images et c'est bon", "Continue comme ça", "Excellent !!", "Oh le champion !", "Parfait", "Magnifique !", "Le modèle IA va en manger !", "Incroyable !!", "Fantastique !"]
 
-DATASET_DIR = Path('dataset')
+DATASET_DIR = Path('image_test/take_photo/')
 DATASET_DIR.mkdir(parents=True, exist_ok=True)
 
 # Définir les caméras par son numéro d'index
 
 # 3 -> cam 3
-cam1 = cv2.VideoCapture(3)
+cam1 = cv2.VideoCapture(2)
 if not cam1.isOpened():
 	exit("Erreur: Impossible d'ouvrir la caméra1")
 
@@ -22,7 +22,7 @@ if not cam2.isOpened():
 	exit("Erreur: Impossible d'ouvrir la caméra2")
 
 # 1 -> cam 2
-cam3 = cv2.VideoCapture(1)
+cam3 = cv2.VideoCapture(3)
 if not cam3.isOpened():
 	exit("Erreur: Impossible d'ouvrir la caméra3")
 
@@ -54,9 +54,9 @@ while True:
 		break
 
 	# Afficher le flux vidéo de chaque caméra dans une fenêtre, individuellement
-	# cv2.imshow('Caméra 1', frame1)
-	# cv2.imshow('Caméra 2', frame2)
-	# cv2.imshow('Caméra 3', frame3)
+	# cv2.imshow('Camera 1', frame1)
+	# cv2.imshow('Camera 2', frame2)
+	# cv2.imshow('Camera 3', frame3)
 
 	# Redimensionner les flux vidéo pour les afficher côte à côte 
 	# (optionnel mais efficace pour mieux visualiser)
