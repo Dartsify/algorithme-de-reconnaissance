@@ -42,8 +42,8 @@ MIN_DART_CONTOUR_AREA = 30 # Seuil d'aire pour filtrer les contours de fléchett
 MASK_MORPH_KERNEL_SIZE = 3 # Nettoyage des masques
 
 # Paramètres backend
-API_URL = os.getenv("DARTS_API_URL", "http://127.0.0.1:8000/throws/")
-API_KEY = os.getenv("DARTS_API_KEY", "MaCleSecretePourLePi_Dart123!")
+API_URL = os.getenv("DARTS_API_URL", "http://100.117.205.35:8000/throws/")
+API_KEY = os.getenv("DARTS_API_KEY", "super_secret_key_for_raspberry_api_12345")
 TARGET_ID = os.getenv("DARTS_TARGET_ID", "000001")
 
 HEADERS = {"X-API-Key": API_KEY}
@@ -297,20 +297,15 @@ def envoyer_point_au_backend(x_impact: float, y_impact: float, camera_id: int) -
 		"camera_id": camera_id,
 	}
 
-	print(
-		f"Envoi de l'impact en ({payload['x_position']:.2f}, {payload['y_position']:.2f}) "
-		f"depuis la caméra {camera_id} vers la cible {TARGET_ID}..."
-	)
-
 	try:
-		response = requests.post(API_URL, json=payload, headers=HEADERS, timeout=5)
+		response = requests.post(API_URL, json=payload, headers=HEADERS, timeout=15)
 		if response.status_code == 200:
 			data = response.json()
-			print(f"Fléchette enregistrée par le serveur (multiplicateur x{data.get('multiplier', '?')}).")
+			print(f"[INFO] Fléchette enregistrée par le serveur (multiplicateur x{data.get('multiplier', '?')}).")
 		else:
-			print(f"Erreur API : {response.status_code} - {response.text}")
+			print(f"[ERREUR] Erreur API : {response.status_code} - {response.text}")
 	except requests.exceptions.RequestException as exc:
-		print(f"Erreur de connexion au serveur : {exc}")
+		print(f"[ERREUR] Erreur de connexion au serveur : {exc}")
 
 
 def analyser_lancer(
@@ -336,14 +331,16 @@ def analyser_lancer(
 
 	if point_camera is None:
 		print(
-			f"[WARN] Impossible d'extraire la position de la nouvelle fléchette "
+			f"[ERREUR] Impossible d'extraire la position de la nouvelle fléchette "
 			f"sur la caméra {camera_choisie.camera_id}."
 		)
 	else:
 		point_corrige = appliquer_homographie(point_camera, homographies[camera_choisie.camera_id])
 		print(f"[INFO] Point détecté par la caméra {camera_choisie.camera_id} : {point_camera}")
 		print(f"[INFO] Point corrigé par homographie : ({point_corrige[0]:.2f}, {point_corrige[1]:.2f})")
-		# envoyer_point_au_backend(point_corrige[0], point_corrige[1], camera_choisie.camera_id)
+
+		print(f"[INFO] Envoi en cours de la position corrigée au serveur backend")
+		envoyer_point_au_backend(point_corrige[0], point_corrige[1], camera_choisie.camera_id)
 
 	# On met à jour l'état de toutes les caméras pour le lancer suivant.
 	for detection in detections:
@@ -381,7 +378,7 @@ def ouvrir_cameras() -> dict[int, cv2.VideoCapture]:
 			if cap is not None:
 				cameras_ouvertes[num_camera] = cap
 			else:
-				raise RuntimeError(f"Erreur : impossible d'ouvrir la caméra {num_camera}.")
+				raise RuntimeError(f"[ERREUR] Impossible d'ouvrir la caméra {num_camera}.")
 			
 	return cameras_ouvertes
 
@@ -393,7 +390,7 @@ def lire_images_reference(cameras: dict[int, cv2.VideoCapture]) -> dict[int, np.
 	for camera_id, camera in cameras.items():
 		success, frame = camera.read()
 		if not success:
-			raise RuntimeError(f"Erreur : impossible d'initialiser l'image de référence de la caméra {camera_id}.")
+			raise RuntimeError(f"[ERREUR] Impossible d'initialiser l'image de référence de la caméra {camera_id}.")
 		frames[camera_id] = frame
 	return frames
 
@@ -405,7 +402,7 @@ def capturer_images_courantes(cameras: dict[int, cv2.VideoCapture]) -> dict[int,
 	for camera_id, camera in cameras.items():
 		success, frame = camera.read()
 		if not success:
-			raise RuntimeError(f"Erreur : impossible de lire le flux vidéo de la caméra {camera_id}.")
+			raise RuntimeError(f"[ERREUR] Impossible de lire le flux vidéo de la caméra {camera_id}.")
 		frames[camera_id] = frame
 	return frames
 
@@ -432,6 +429,8 @@ def main() -> None:
 		derniere_capture = 0.0
 		capture_en_attente = False
 		instant_detection = 0.0
+		
+		nbLancer = 1 # compteur de lancer pour le nommage des images sauvegardées(à supprimer plus tard)
 
 		while True:
 			frames_actuelles = capturer_images_courantes(cameras)
@@ -457,22 +456,26 @@ def main() -> None:
 				print("Fléchette détectée, capture prévue dans 1 seconde.")
 
 			if capture_en_attente and (maintenant - instant_detection) >= CAPTURE_DELAY_SECONDS:
-				timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+				# timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
 				frames_capturees = capturer_images_courantes(cameras)
 
-				# Sauvegarde des images capturées pour DEBUG
+				# Sauvegarde des images capturées pour DEBUG par lance par caméra
 				for camera_id, frame in frames_capturees.items():
-					chemin_image = IMAGE_DIR / f"cam{camera_id}_{timestamp}.jpg"
+					chemin_image = IMAGE_DIR / f"cam{camera_id}_lancer{nbLancer}.jpg"
 					if not cv2.imwrite(str(chemin_image), frame):
-						print(f"[WARN] Échec de l'enregistrement de {chemin_image}.")
+						print(f"[ERREUR] Échec de l'enregistrement de {chemin_image}.")
+				nbLancer += 1
 
 				# Analyse du lancer à partir des 3 images capturées
 				# Images trop grandes 1280x720, à redimensionner plus tard pour accélérer l'inférence
-				print("---Temps d'anlyse : ~5 secondes par caméra---")
+				print("---Temps d'analyse : ~7 secondes par caméra---")
 				analyser_lancer(learner, homographies, frames_capturees, camera_states)
 
 				capture_en_attente = False
 				derniere_capture = maintenant
+
+				# SI OK, ON PASSE AU LANCER SUIVANT)
+				print(f"\n--- En attente du lancer {nbLancer} ---")
 
 			# Mise à jour des images de référence pour la prochaine différence de frame.
 			previous_gray = current_gray
