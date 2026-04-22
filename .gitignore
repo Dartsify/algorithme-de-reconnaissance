@@ -1,5 +1,7 @@
 image_test
 Dartsify
+final/saved_images
+.vscode
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -204,9 +206,8 @@ cython_debug/
 .cursorignore
 .cursorindexingignore
 
-# Large local model artifacts
-dartsify_ai.pkl
-dartsify_aimodel_with_weights.pth
+# Large local AI model artifacts
+*.pkl
 
 # Marimo
 marimo/_static/

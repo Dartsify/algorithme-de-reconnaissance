@@ -12,22 +12,22 @@ IMAGE_DIR = Path('image_test/detect_dart/')
 IMAGE_DIR.mkdir(parents=True, exist_ok=True)
 
 # Paramètres de détection du mouvement
-MOTION_PIXEL_THRESHOLD = 25
-MOTION_AREA_THRESHOLD = 4000
-CAPTURE_DELAY_SECONDS = 1
-CAPTURE_COOLDOWN_SECONDS = 1.0
+MOTION_PIXEL_THRESHOLD = 25 # Seuil de différence de pixel pour considérer qu'il y a du mouvement
+MOTION_AREA_THRESHOLD = 4000 # Seuil de surface de mouvement pour déclencher la capture (ajuster selon les tests)
+CAPTURE_DELAY_SECONDS = 1 # Délai entre la détection du mouvement et la capture de l'image (pour laisser la fléchette se stabiliser)
+CAPTURE_COOLDOWN_SECONDS = 1.0 # Délai minimum entre deux captures pour éviter les captures multiples dues à un même mouvement
 
 if pathlib.PosixPath is not pathlib.WindowsPath:
 	pathlib.PosixPath = pathlib.WindowsPath
 
 
 # Charger le modèle entraîné (chemin d'accè du fichier)
-dartsify_ai = load_learner('dartsify_ai.pkl')
+dartsify_ai = load_learner('dartsify_ai_dicejaccard.pkl')
 
 
 """
 ------------------------------------------------------------------
-Communication avec Backend (à implémenter dans un module externe) :
+DEBUT - Communication avec Backend (à implémenter dans un module externe) :
 ------------------------------------------------------------------
 """
 import requests
@@ -48,7 +48,8 @@ def send_dart_to_backend(x_impact, y_impact):
 	payload = {
 		"target_id": TARGET_ID,
 		"x_position": float(x_impact), 
-		"y_position": float(y_impact)
+		"y_position": float(y_impact),
+		"camera_id": 1 # [1,2,3] selon la caméra qui a détecté la fléchette (pour l'instant on peut juste envoyer 1)
 	}
 
 	print(f"Envoi de l'impact en ({payload['x_position']}, {payload['y_position']}) sur la cible {TARGET_ID}...")
@@ -62,6 +63,12 @@ def send_dart_to_backend(x_impact, y_impact):
 			print(f"Erreur API : {reponse.text}")
 	except requests.exceptions.RequestException as e:
 		print(f"Erreur de connexion au serveur : {e}")
+
+"""
+------------------------------------------------------------------
+FIN - Communication avec Backend
+------------------------------------------------------------------
+"""
 
 def preparer_image_pour_difference(frame):
 	"""Convertit une image en niveau de gris et la lisse pour réduire le bruit."""
@@ -80,15 +87,25 @@ def calculer_score_mouvement(image_precedente, image_actuelle):
 
 
 def analyser_image_capturee(path_image):
-	image = cv2.imread(path_image, cv2.IMREAD_COLOR)
+	image = PILImage.create(path_image)
 	if image is None:
 		print(f"Erreur: impossible de lire {path_image}.")
 		return
 
-	out = dartsify_ai.predict(path_image)
-	
-	img = image[:, :, ::-1].copy() 
-	img_out = out[0].numpy()
+	after_item  = dartsify_ai.dls.after_item     # resize, ToTensor, etc.
+	after_batch = dartsify_ai.dls.after_batch    # Normalize, IntToFloat, etc.
+
+	x = after_item(image)              # apply item transforms
+	x = after_batch(x[None])               # add batch dim
+
+	dartsify_ai.model.eval()
+	with torch.no_grad():
+		out = dartsify_ai.model(x.to(dartsify_ai.dls.device))
+		out = out.argmax(dim=1)
+
+	mask = out[0].numpy()
+	# garder seulement la classe "Point"
+	mask = (mask == 1).astype(np.uint8) * 255
 	img_out = cv2.convertScaleAbs(img_out)
 
 	contours_info = cv2.findContours(img_out, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
@@ -97,6 +114,10 @@ def analyser_image_capturee(path_image):
 	if not contours:
 		print(f"Aucun contour détecté dans {path_image}.")
 		return
+	
+	image_np = np.array(image) # Convertir PILImage en tableau NumPy (format RGB)
+	image_bgr = cv2.cvtColor(image_np, cv2.COLOR_RGB2BGR) # Convertir RGB en BGR pour OpenCV
+	output = image_bgr.copy()
 
 	for contour in contours:
 		moments = cv2.moments(contour)
@@ -116,24 +137,19 @@ def analyser_image_capturee(path_image):
 		# send_dart_to_backend(x_impact=cX, y_impact=cY) # normalement envoyer l'homographie
 
 
+		overlay = output.copy()
 
-		img = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
+		color = (0, 255, 0)
+		cv2.circle(overlay, (cX, cY), 25, color, -1)
 
-		overlay = img.copy()
-		output = img.copy()
-		inner_colour = (255, 255, 255)
-		outer_colour = (255, 255, 255)
-		cv2.circle(overlay, (cX, cY), 25, outer_colour, -1)
 		alpha = 0.2
 		cv2.addWeighted(overlay, alpha, output, 1 - alpha, 0, output)
 
 		# Dessiner les cercles de détection
-		cv2.circle(output, (cX, cY), 25, outer_colour, 1, cv2.LINE_AA)
-		cv2.circle(output, (cX, cY), 3, inner_colour, 1, cv2.LINE_AA)
+		cv2.circle(output, (cX, cY), 3, color, -1)
 
-	plt.figure(figsize=(14, 14))
-	plt.imshow(output)
-	plt.axis('off')
+	plt.figure(figsize = (12, 12))
+	plt.imshow(cv2.cvtColor(output, cv2.COLOR_BGR2RGB))
 	plt.show()
 
 # Définir les caméras par son numéro d'index
@@ -141,17 +157,17 @@ def analyser_image_capturee(path_image):
 # Si c'est pas bon , utilisez le code de take_photo.py pour trouver les bons indices de caméras sur votre machine.
 
 # INDICE 3 -> cam 1
-cam1 = cv2.VideoCapture(2)
+cam1 = cv2.VideoCapture(3)
 if not cam1.isOpened():
 	exit("Erreur: Impossible d'ouvrir la caméra1")
 
-# INDICE 1 -> cam 2
+# INDICE 0 -> cam 2
 cam2 = cv2.VideoCapture(0)
 if not cam2.isOpened():
 	exit("Erreur: Impossible d'ouvrir la caméra2")
 
-# # INDICE 0 -> cam 3
-cam3 = cv2.VideoCapture(3)
+# # INDICE 2 -> cam 3
+cam3 = cv2.VideoCapture(2)
 if not cam3.isOpened():
 	exit("Erreur: Impossible d'ouvrir la caméra3")
 
