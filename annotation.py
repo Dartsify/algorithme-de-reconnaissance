@@ -36,8 +36,8 @@ Voici un label d'exemple pour une image dans le fichier "label.csv":
 }
 """
 ROOT = Path(__file__).resolve().parent
-IMAGE_DIR = ROOT / "image_test" / "homographie"
-LABEL_PATH = ROOT / "image_test" / "homographie" / "label.csv"
+IMAGE_DIR = ROOT / "Dartsify_mur" / "dataset_mur"
+LABEL_PATH = ROOT / "Dartsify_mur" / "label.csv"
 
 
 def list_images(image_dir: Path):
@@ -138,8 +138,8 @@ def main():
 	ax.set_xlabel("x")
 	ax.set_ylabel("y")
 
-	button_prev_ax = fig.add_axes([0.28, 0.05, 0.18, 0.08])
-	button_next_ax = fig.add_axes([0.54, 0.05, 0.18, 0.08])
+	button_prev_ax = fig.add_axes((0.28, 0.05, 0.18, 0.08))
+	button_next_ax = fig.add_axes((0.54, 0.05, 0.18, 0.08))
 	button_prev = Button(button_prev_ax, "Previous")
 	button_next = Button(button_next_ax, "Next")
 

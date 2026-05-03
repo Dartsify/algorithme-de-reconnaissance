@@ -48,7 +48,7 @@ MIN_DART_CONTOUR_AREA = 600 # Seuil d'aire pour filtrer les contours de fléchet
 MASK_MORPH_KERNEL_SIZE = 3 # Nettoyage des masques
 
 # Paramètres backend
-API_URL = os.getenv("DARTS_API_URL", "http://127.0.0.1:8100/throws/")
+API_URL = os.getenv("DARTS_API_URL", "http://127.0.0.1:8000/throws/")
 API_KEY = os.getenv("DARTS_API_KEY", "super_secret_key_for_raspberry_api_12345")
 TARGET_ID = os.getenv("DARTS_TARGET_ID", "000001")
 
@@ -162,9 +162,7 @@ def calculer_score_mouvement(image_precedente: np.ndarray, image_actuelle: np.nd
 		255,
 		cv2.THRESH_BINARY,
 	)
-	# Use an explicit structuring element to satisfy type checkers (None is accepted by OpenCV at runtime
-	# but static type checkers may flag it). A 3x3 rectangular kernel is typical for dilation here.
-	kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
+	kernel = np.ones((3, 3), dtype=np.uint8)
 	difference_binaire = cv2.dilate(difference_binaire, kernel, iterations=2)
 	contours, _ = cv2.findContours(difference_binaire, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 	return float(sum(cv2.contourArea(contour) for contour in contours))
@@ -174,12 +172,6 @@ def charger_modele():
 	"""Charge le modèle de segmentation entraîné."""
 	if not MODEL_PATH.exists():
 		raise FileNotFoundError(f"Modèle introuvable : {MODEL_PATH}")
-
-	def get_x(row):
-		return row['image_path']
-
-	def get_mask(row):
-		return row['mask_path']
 	
 	learn = load_learner(MODEL_PATH)
 
@@ -203,30 +195,30 @@ def charger_modele():
 	return learn
 
 
-def predire_masque_binaire(learner, frame_bgr: np.ndarray) -> np.ndarray:
-	"""Retourne un masque binaire pour la classe correspondant à la pointe."""
+# def predire_masque_binaire(learner: any, frame_bgr: np.ndarray) -> np.ndarray:
+# 	"""Retourne un masque binaire pour la classe correspondant à la pointe."""
 
-	frame_rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
-	image = PILImage.create(frame_rgb)
+# 	frame_rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
+# 	image = PILImage.create(frame_rgb)
 
-	after_item = learner.dls.after_item
-	after_batch = learner.dls.after_batch
-	x = after_item(image)
-	x = after_batch(x[None])
+# 	after_item = learner.dls.after_item
+# 	after_batch = learner.dls.after_batch
+# 	x = after_item(image)
+# 	x = after_batch(x[None])
 
-	learner.model.eval()
-	with torch.no_grad():
-		prediction = learner.model(x.to(learner.dls.device)).argmax(dim=1)[0]
+# 	learner.model.eval()
+# 	with torch.no_grad():
+# 		prediction = learner.model(x.to(learner.dls.device)).argmax(dim=1)[0]
 
-	mask = (prediction.cpu().numpy() == MASK_CLASS_INDEX).astype(np.uint8) * 255
-	# mask = (prediction.numpy() == MASK_CLASS_INDEX).astype(np.uint8) * 255
+# 	mask = (prediction.cpu().numpy() == MASK_CLASS_INDEX).astype(np.uint8) * 255
+# 	# mask = (prediction.numpy() == MASK_CLASS_INDEX).astype(np.uint8) * 255
 
-	# mask = cv2.convertScaleAbs(mask)
-	# Nettoyage léger pour supprimer les petits pixels parasites.
-	kernel = np.ones((MASK_MORPH_KERNEL_SIZE, MASK_MORPH_KERNEL_SIZE), np.uint8)
-	mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel, iterations=1)
-	mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel, iterations=1)
-	return mask
+# 	# mask = cv2.convertScaleAbs(mask)
+# 	# Nettoyage léger pour supprimer les petits pixels parasites.
+# 	kernel = np.ones((MASK_MORPH_KERNEL_SIZE, MASK_MORPH_KERNEL_SIZE), np.uint8)
+# 	mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel, iterations=1)
+# 	mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel, iterations=1)
+# 	return mask
 
 
 def compter_flechettes_dans_masque(mask: np.ndarray) -> int:
@@ -317,44 +309,154 @@ def envoyer_point_au_backend(x_impact: float, y_impact: float, camera_id: int) -
 		print(f"[ERREUR] Erreur de connexion au serveur : {exc}")
 
 
+# def analyser_lancer(
+# 	learner: any,
+# 	homographies: dict[int, np.ndarray],
+# 	frames: dict[int, np.ndarray],
+# 	states: dict[int, CameraState],
+# ) -> None:
+# 	"""Analyse un lancer complet à partir des 3 images capturées simultanément."""
+# 	# L'objectif plus tard sera de capturer les images en parallèle, mais pour l'instant on les traite séquentiellement.
+
+# 	detections: list[CameraDetection] = []
+# 	for camera_id, frame in frames.items():
+# 		mask = predire_masque_binaire(learner, frame)
+# 		count = compter_flechettes_dans_masque(mask)
+# 		detections.append(CameraDetection(camera_id=camera_id, mask=mask, dart_count=count))
+# 		print(f"[INFO] Caméra {camera_id} : {count} fléchette(s) détectée(s).")
+
+# 	camera_choisie = choisir_camera_detection(detections)
+# 	etat_camera = states[camera_choisie.camera_id]
+# 	masque_nouveau = isoler_nouvelle_fleche(camera_choisie.mask, etat_camera.previous_mask)
+# 	point_camera = extraire_point_cible(masque_nouveau)
+
+# 	if point_camera is None:
+# 		print(
+# 			f"[ERREUR] Impossible d'extraire la position de la nouvelle fléchette "
+# 			f"sur la caméra {camera_choisie.camera_id}."
+# 		)
+# 	else:
+# 		point_corrige = appliquer_homographie(point_camera, homographies[camera_choisie.camera_id])
+# 		print(f"[INFO] Point détecté par la caméra {camera_choisie.camera_id} : {point_camera}")
+# 		print(f"[INFO] Point corrigé par homographie : ({point_corrige[0]:.2f}, {point_corrige[1]:.2f})")
+
+# 		# print(f"[INFO] Envoi en cours de la position corrigée au serveur backend")
+# 		# envoyer_point_au_backend(point_corrige[0], point_corrige[1], camera_choisie.camera_id)
+
+# 	# On met à jour l'état de toutes les caméras pour le lancer suivant.
+# 	for detection in detections:
+# 		states[detection.camera_id].previous_mask = detection.mask.copy()
+# 		states[detection.camera_id].previous_count = detection.dart_count
+
 def analyser_lancer(
-	learner,
-	homographies: dict[int, np.ndarray],
-	frames: dict[int, np.ndarray],
-	states: dict[int, CameraState],
+    learner,
+    homographies: dict[int, np.ndarray],
+    frames: dict[int, np.ndarray],
+    states: dict[int, CameraState],
 ) -> None:
-	"""Analyse un lancer complet à partir des 3 images capturées simultanément."""
-	# L'objectif plus tard sera de capturer les images en parallèle, mais pour l'instant on les traite séquentiellement.
+    """Analyse un lancer complet en envoyant les 3 images redimensionnées en MÊME TEMPS à l'IA."""
 
-	detections: list[CameraDetection] = []
-	for camera_id, frame in frames.items():
-		mask = predire_masque_binaire(learner, frame)
-		count = compter_flechettes_dans_masque(mask)
-		detections.append(CameraDetection(camera_id=camera_id, mask=mask, dart_count=count))
-		print(f"[INFO] Caméra {camera_id} : {count} fléchette(s) détectée(s).")
+    # --- NOUVEAU : FACTEUR D'ÉCHELLE ---
+    SCALE_FACTOR = 2
+    NEW_WIDTH = 1280 // SCALE_FACTOR  # 640
+    NEW_HEIGHT = 720 // SCALE_FACTOR  # 360
 
-	camera_choisie = choisir_camera_detection(detections)
-	etat_camera = states[camera_choisie.camera_id]
-	masque_nouveau = isoler_nouvelle_fleche(camera_choisie.mask, etat_camera.previous_mask)
-	point_camera = extraire_point_cible(masque_nouveau)
+    def predire_masques_en_lot(learner, liste_frames_bgr: list[np.ndarray]) -> list[np.ndarray]:
+        """Prend une liste de 3 images BGR, les envoie à FastAI d'un coup, et retourne 3 masques binaires."""
+        liste_tenseurs = []
+        for img in liste_frames_bgr:
+            # --- NOUVEAU : REDIMENSIONNEMENT AVANT L'IA ---
+            img_resized = cv2.resize(img, (NEW_WIDTH, NEW_HEIGHT), interpolation=cv2.INTER_AREA)
+            
+            image_rgb = cv2.cvtColor(img_resized, cv2.COLOR_BGR2RGB)
+            image_pil = PILImage.create(image_rgb)
+            x = learner.dls.after_item(image_pil)
+            liste_tenseurs.append(x)
 
-	if point_camera is None:
-		print(
-			f"[ERREUR] Impossible d'extraire la position de la nouvelle fléchette "
-			f"sur la caméra {camera_choisie.camera_id}."
-		)
-	else:
-		point_corrige = appliquer_homographie(point_camera, homographies[camera_choisie.camera_id])
-		print(f"[INFO] Point détecté par la caméra {camera_choisie.camera_id} : {point_camera}")
-		print(f"[INFO] Point corrigé par homographie : ({point_corrige[0]:.2f}, {point_corrige[1]:.2f})")
+        x_batch = torch.stack(liste_tenseurs)
+        x_batch = learner.dls.after_batch(x_batch)
 
-		print(f"[INFO] Envoi en cours de la position corrigée au serveur backend")
-		envoyer_point_au_backend(point_corrige[0], point_corrige[1], camera_choisie.camera_id)
+        learner.model.eval()
+        with torch.no_grad():
+            preds = learner.model(x_batch.to(learner.dls.device))
 
-	# On met à jour l'état de toutes les caméras pour le lancer suivant.
-	for detection in detections:
-		states[detection.camera_id].previous_mask = detection.mask.copy()
-		states[detection.camera_id].previous_count = detection.dart_count
+        masques_batch = preds.argmax(dim=1) 
+        liste_masques_finaux = []
+        
+        # ATTENTION : Si le masque est plus petit, il faut aussi réduire la taille du kernel de nettoyage
+        # et réduire temporairement MIN_DART_CONTOUR_AREA si vous l'utilisez plus bas.
+        kernel_size = max(1, MASK_MORPH_KERNEL_SIZE // SCALE_FACTOR)
+        kernel = np.ones((kernel_size, kernel_size), np.uint8)
+
+        for i in range(len(liste_frames_bgr)):
+            masque_tensor = masques_batch[i] 
+            masque_numpy = (masque_tensor.cpu().numpy() == MASK_CLASS_INDEX).astype(np.uint8) * 255
+            masque_numpy = cv2.morphologyEx(masque_numpy, cv2.MORPH_OPEN, kernel, iterations=1)
+            masque_numpy = cv2.morphologyEx(masque_numpy, cv2.MORPH_CLOSE, kernel, iterations=1)
+            liste_masques_finaux.append(masque_numpy)
+
+        return liste_masques_finaux
+
+
+    camera_ids = list(frames.keys())
+    liste_images = [frames[cam_id] for cam_id in camera_ids]
+    liste_masques = predire_masques_en_lot(learner, liste_images)
+
+    detections: list[CameraDetection] = []
+    
+    # NOUVEAU : Adapter le seuil d'aire car l'image est 4x plus petite
+    SEUIL_AIRE_REDIMENSIONNE = MIN_DART_CONTOUR_AREA // (SCALE_FACTOR ** 2)
+
+    for i, camera_id in enumerate(camera_ids):
+        mask = liste_masques[i]
+        
+        # On passe notre seuil adapté à la fonction de comptage (il faudra modifier votre fonction
+        # compter_flechettes_dans_masque pour qu'elle accepte un paramètre de seuil optionnel)
+        # count = compter_flechettes_dans_masque(mask, seuil=SEUIL_AIRE_REDIMENSIONNE)
+        
+        # Pour faire simple ici sans modifier votre autre fonction, faisons le comptage en ligne :
+        contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        count = sum(1 for c in contours if cv2.contourArea(c) >= SEUIL_AIRE_REDIMENSIONNE)
+        
+        detections.append(CameraDetection(camera_id=camera_id, mask=mask, dart_count=count))
+        print(f"[INFO] Caméra {camera_id} : {count} fléchette(s) détectée(s).")
+
+    camera_choisie = choisir_camera_detection(detections)
+    etat_camera = states[camera_choisie.camera_id]
+    masque_nouveau = isoler_nouvelle_fleche(camera_choisie.mask, etat_camera.previous_mask)
+    
+    # On extrait le point sur l'image réduite
+    # (Il faut aussi modifier extraire_point_cible pour utiliser SEUIL_AIRE_REDIMENSIONNE)
+    contours_cibles, _ = cv2.findContours(masque_nouveau, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    contours_valides = [c for c in contours_cibles if cv2.contourArea(c) >= SEUIL_AIRE_REDIMENSIONNE]
+    
+    point_camera = None
+    if contours_valides:
+        contour_principal = max(contours_valides, key=cv2.contourArea)
+        moments = cv2.moments(contour_principal)
+        if moments["m00"] != 0:
+            cx = int(moments["m10"] / moments["m00"])
+            cy = int(moments["m01"] / moments["m00"])
+            point_camera = (cx, cy)
+
+    if point_camera is None:
+        print(f"[ERREUR] Impossible d'extraire la position sur la caméra {camera_choisie.camera_id}.")
+    else:
+        # --- NOUVEAU : REMISE À L'ÉCHELLE 1280x720 ---
+        point_original = (point_camera[0] * SCALE_FACTOR, point_camera[1] * SCALE_FACTOR)
+        
+        point_corrige = appliquer_homographie(point_original, homographies[camera_choisie.camera_id])
+        print(f"[INFO] Point détecté (échelle réduite) : {point_camera}")
+        print(f"[INFO] Point recalculé (échelle 100%) : {point_original}")
+        print(f"[INFO] Point corrigé par homographie : ({point_corrige[0]:.2f}, {point_corrige[1]:.2f})")
+
+        print(f"[INFO] Envoi en cours de la position corrigée au serveur backend")
+        envoyer_point_au_backend(point_corrige[0], point_corrige[1], camera_choisie.camera_id)
+
+    # Mise à jour de l'état (les masques sauvegardés sont en 640x360, ce qui économise aussi de la RAM !)
+    for detection in detections:
+        states[detection.camera_id].previous_mask = detection.mask.copy()
+        states[detection.camera_id].previous_count = detection.dart_count
 
 def ouvrir_une_camera(camera_id):
 	"""Tente d'ouvrir une seule caméra (Multithreadé)."""
@@ -474,7 +576,7 @@ def main() -> None:
 
 				# Analyse du lancer à partir des 3 images capturées
 				# Images trop grandes 1280x720, à redimensionner plus tard pour accélérer l'inférence
-				print("---Temps d'analyse : ~7 secondes par caméra---")
+				print("---Temps d'analyse : ~3 secondes---")
 				analyser_lancer(learner, homographies, frames_capturees, camera_states)
 
 				capture_en_attente = False

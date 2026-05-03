@@ -1,7 +1,12 @@
 image_test
 Dartsify
+Dartsify_mur
 final/saved_images
 .vscode
+# Large local AI model artifacts
+*.pkl
+*.onnx
+*.onnx.data
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -205,9 +210,6 @@ cython_debug/
 #  refer to https://docs.cursor.com/context/ignore-files
 .cursorignore
 .cursorindexingignore
-
-# Large local AI model artifacts
-*.pkl
 
 # Marimo
 marimo/_static/

@@ -5,7 +5,7 @@ import cv2
 
 IMAGE_DIR = Path('final/saved_images')
 
-img = cv2.imread(str(IMAGE_DIR / 'cam1_lancer2.jpg'), cv2.IMREAD_COLOR_RGB)
+img = cv2.imread(str(IMAGE_DIR / 'cam2_lancer2.jpg'), cv2.IMREAD_COLOR_RGB)
 print(f'Image height: {img.shape[0]} pixels')
 print(f'Image width: {img.shape[1]} pixels')
 # print(f'Number of color channels: {img.shape[2]}') # 3 pour RGB
