@@ -36,7 +36,7 @@ Voici un label d'exemple pour une image dans le fichier "label.csv":
 }
 """
 ROOT = Path(__file__).resolve().parent
-IMAGE_DIR = ROOT / "Dartsify_mur" / "dataset_mur"
+IMAGE_DIR = ROOT / "Dartsify_mur" / "dataset"
 LABEL_PATH = ROOT / "Dartsify_mur" / "label.csv"
 
 

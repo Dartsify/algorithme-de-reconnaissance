@@ -10,7 +10,7 @@ import re
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from time import monotonic
+from time import monotonic, sleep
 import keyboard
 import concurrent.futures # pour le traitement en parallèle des caméras
 
@@ -36,12 +36,13 @@ MODEL_PATH = PROJECT_ROOT / "dartsify_ai_radius15.onnx"
 IMAGE_DIR.mkdir(parents=True, exist_ok=True)
 
 # Paramètres de détection du mouvement
-# MOTION_PIXEL_THRESHOLD = 25
 MOTION_PIXEL_THRESHOLD = 25
+# MOTION_PIXEL_THRESHOLD = 25
 # MOTION_AREA_THRESHOLD = 4000
 MOTION_AREA_THRESHOLD = 15000
 CAPTURE_DELAY_SECONDS = 1.0
 CAPTURE_COOLDOWN_SECONDS = 1.0
+LANCERS_PAR_SERIE = 3
 
 # Paramètres de post-traitement des masques
 MASK_CLASS_INDEX = 1 # Classe Point
@@ -52,7 +53,7 @@ MIN_DART_CONTOUR_AREA = 600 # Seuil d'aire pour filtrer les contours de fléchet
 MASK_MORPH_KERNEL_SIZE = 3 # Nettoyage des masques
 
 # Paramètres backend
-API_URL = os.getenv("DARTS_API_URL", "http://100.107.205.98/throws/")
+API_URL = os.getenv("DARTS_API_URL", "http://127.0.0.1:8000/throws/")
 API_KEY = os.getenv("DARTS_API_KEY", "super_secret_key_for_raspberry_api_12345")
 TARGET_ID = os.getenv("DARTS_TARGET_ID", "000001")
 
@@ -451,6 +452,33 @@ def capturer_images_courantes(cameras: dict[int, cv2.VideoCapture]) -> dict[int,
 	return frames
 
 
+def attendre_reprise_apres_pause(
+	cameras: dict[int, cv2.VideoCapture],
+	camera_states: dict[int, CameraState],
+) -> dict[int, np.ndarray]:
+	"""Attend que le joueur appuie sur ESPACE pour reprendre la partie.
+
+	Pendant la pause, on remet aussi à zéro l'historique des caméras afin de
+	repartir sur une nouvelle base après retrait des fléchettes.
+	"""
+
+	print("[PAUSE]Retirez les fléchettes puis appuyez sur ESPACE pour reprendre.")
+	while True:
+		if keyboard.is_pressed("esc"):
+			raise KeyboardInterrupt
+		if keyboard.is_pressed("space"):
+			break
+		sleep(0.1)
+
+	for state in camera_states.values():
+		state.previous_mask = None
+		state.previous_count = 0
+
+	frames_reference = lire_images_reference(cameras)
+	print("[INFO] Reprise de la lecture du flux vidéo.")
+	return frames_reference
+
+
 def main() -> None:
 	"""Boucle principale du système d'auto-scoring."""
 
@@ -470,6 +498,7 @@ def main() -> None:
 		derniere_capture = 0.0
 		capture_en_attente = False
 		instant_detection = 0.0
+		lancers_depuis_pause = 0
 		
 		nbLancer = 1 # compteur de lancer pour le nommage des images sauvegardées(à supprimer plus tard)
 
@@ -511,6 +540,7 @@ def main() -> None:
 				# Images trop grandes 1280x720, à redimensionner plus tard pour accélérer l'inférence
 				print("---Temps d'analyse : ~3 secondes---")
 				analyser_lancer(learner, homographies, frames_capturees, camera_states)
+				lancers_depuis_pause += 1
 
 				capture_en_attente = False
 				derniere_capture = maintenant
@@ -518,10 +548,22 @@ def main() -> None:
 				# SI OK, ON PASSE AU LANCER SUIVANT)
 				print(f"\n--- En attente du lancer {nbLancer} ---")
 
+				if lancers_depuis_pause >= LANCERS_PAR_SERIE:
+					frames_reference = attendre_reprise_apres_pause(cameras, camera_states)
+					previous_gray = {
+						camera_id: preparer_image_pour_difference(frame)
+						for camera_id, frame in frames_reference.items()
+					}
+					capture_en_attente = False
+					derniere_capture = monotonic()
+					lancers_depuis_pause = 0
+					print(f"\n--- Nouvelle série, en attente du lancer {nbLancer} ---")
+					continue
+
 			# Mise à jour des images de référence pour la prochaine différence de frame.
 			previous_gray = current_gray
 
-			if keyboard.is_pressed('space') or keyboard.is_pressed('esc'):
+			if keyboard.is_pressed('esc'):
 				print("Fin de la partie.")
 				break
 	finally:

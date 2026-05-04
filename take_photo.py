@@ -11,9 +11,9 @@ from datetime import datetime
 from random import randint
 import concurrent.futures # pour le traitement en parallèle des caméras
 
-message = ["Bien joué !!!!!!!", "Allez ! Encore quelques images et c'est bon", "Continue comme ça", "Excellent !!", "Oh le champion !", "Parfait", "Magnifique !", "Le modèle IA va en manger !", "Incroyable !!", "Fantastique !"]
+message = ["Bien joué !!!!!!!", "T'es trop belle LAURINE", "Allez ! Encore quelques images et c'est bon", "Continue comme ça", "Excellent !!", "Oh le champion !", "Parfait", "Magnifique !", "Le modèle IA va en manger !", "Incroyable !!", "Fantastique !"]
 
-DATASET_DIR = Path('Dartsify_mur/dataset_mur/')
+DATASET_DIR = Path('Dartsify_mur/dataset/')
 DATASET_DIR.mkdir(parents=True, exist_ok=True)
 HEIGHT, WIDTH = 720, 1280
 
@@ -68,20 +68,20 @@ while True:
 		break
 
 	# Afficher le flux vidéo de chaque caméra dans une fenêtre, individuellement
-	cv2.imshow('Camera 1', frame1)
-	cv2.imshow('Camera 2', frame2)
-	cv2.imshow('Camera 3', frame3)
+	# cv2.imshow('Camera 1', frame1)
+	# cv2.imshow('Camera 2', frame2)
+	# cv2.imshow('Camera 3', frame3)
 
 	# Redimensionner les flux vidéo pour les afficher côte à côte 
 	# (optionnel mais efficace pour mieux visualiser)
-	# frame_rz1 = cv2.resize(frame1, (WIDTH, HEIGHT))
-	# frame_rz2 = cv2.resize(frame2, (WIDTH, HEIGHT))
-	# frame_rz3 = cv2.resize(frame3, (WIDTH, HEIGHT))
+	frame_rz1 = cv2.resize(frame1, (500, 500))
+	frame_rz2 = cv2.resize(frame2, (500, 500))
+	frame_rz3 = cv2.resize(frame3, (500, 500))
 	# # Combiner horizontalement les trois flux vidéo
-	# combined_frame = np.hstack((frame_rz1, frame_rz2, frame_rz3))
+	combined_frame = np.hstack((frame_rz1, frame_rz2, frame_rz3))
 
 	# # Afficher le flux vidéo combiné dans une même fenêtre
-	# cv2.imshow('Vue d\'ensemble', combined_frame)
+	cv2.imshow('Vue d\'ensemble', combined_frame)
 
 	key = cv2.waitKey(1) & 0xFF
 
@@ -91,15 +91,12 @@ while True:
 		ok1 = cv2.imwrite(str(DATASET_DIR / f'cam1_{ts}.jpg'), frame1)
 		ok2 = cv2.imwrite(str(DATASET_DIR / f'cam2_{ts}.jpg'), frame2)
 		ok3 = cv2.imwrite(str(DATASET_DIR / f'cam3_{ts}.jpg'), frame3)
-
 		if not (ok1 and ok2 and ok3):
 			print("Erreur: échec d'enregistrement (cv2.imwrite a renvoyé False).")
 		else:
 			print(f"{message[randint(0, len(message)-1)]}")
 			print(f'Nombre d\'images dans le dataset: {len(list(DATASET_DIR.glob("*.jpg")))}')
-
-	# Appuyer sur ESC pour arrêter la capture
-	if key == 27:  # 27 est le code ASCII pour ESC
+	elif key == 27:  # Appuyer sur ESC pour arrêter la capture
 		break
 
 # Release the capture and writer objects
