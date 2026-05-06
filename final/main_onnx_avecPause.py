@@ -8,7 +8,6 @@ import pathlib
 import random
 import re
 from dataclasses import dataclass
-from datetime import datetime
 from pathlib import Path
 from time import monotonic, sleep
 import keyboard
@@ -31,7 +30,7 @@ import onnxruntime as ort
 PROJECT_ROOT = Path(__file__).resolve().parent
 IMAGE_DIR = PROJECT_ROOT / "saved_images"
 HOMOGRAPHY_FILE = PROJECT_ROOT / "matrice_homographie"
-MODEL_PATH = PROJECT_ROOT / "dartsify_ai_radius15.onnx"
+MODEL_PATH = PROJECT_ROOT / "dartsify_ai_resnet34_radius15_vertical.onnx"
 
 IMAGE_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -39,10 +38,12 @@ IMAGE_DIR.mkdir(parents=True, exist_ok=True)
 MOTION_PIXEL_THRESHOLD = 25
 # MOTION_PIXEL_THRESHOLD = 25
 # MOTION_AREA_THRESHOLD = 4000
-MOTION_AREA_THRESHOLD = 15000
-CAPTURE_DELAY_SECONDS = 1.0
+MOTION_AREA_THRESHOLD = 7000
+CAPTURE_DELAY_SECONDS = 0.5
 CAPTURE_COOLDOWN_SECONDS = 1.0
 LANCERS_PAR_SERIE = 3
+PAUSE_REFERENCE_PIXEL_THRESHOLD = 10
+PAUSE_REFERENCE_CHANGED_RATIO = 0.01
 
 # Paramètres de post-traitement des masques
 MASK_CLASS_INDEX = 1 # Classe Point
@@ -452,21 +453,42 @@ def capturer_images_courantes(cameras: dict[int, cv2.VideoCapture]) -> dict[int,
 	return frames
 
 
+def images_identiques(frames_a: dict[int, np.ndarray], frames_b: dict[int, np.ndarray]) -> bool:
+	"""Vérifie que chaque caméra voit une image suffisamment proche de la référence."""
+
+	if frames_a.keys() != frames_b.keys():
+		return False
+
+	for camera_id in frames_a:
+		reference_gray = preparer_image_pour_difference(frames_b[camera_id])
+		current_gray = preparer_image_pour_difference(frames_a[camera_id])
+
+		difference = cv2.absdiff(reference_gray, current_gray)
+		changed_pixels = np.count_nonzero(difference > PAUSE_REFERENCE_PIXEL_THRESHOLD)
+		changed_ratio = changed_pixels / difference.size
+		if changed_ratio > PAUSE_REFERENCE_CHANGED_RATIO:
+			return False
+
+	return True
+
+
 def attendre_reprise_apres_pause(
 	cameras: dict[int, cv2.VideoCapture],
 	camera_states: dict[int, CameraState],
+	frames_reference: dict[int, np.ndarray],
 ) -> dict[int, np.ndarray]:
-	"""Attend que le joueur appuie sur ESPACE pour reprendre la partie.
+	"""Attend que la cible redevienne vide avant de reprendre la partie.
 
 	Pendant la pause, on remet aussi à zéro l'historique des caméras afin de
 	repartir sur une nouvelle base après retrait des fléchettes.
 	"""
 
-	print("[PAUSE]Retirez les fléchettes puis appuyez sur ESPACE pour reprendre.")
+	print("[PAUSE] Retirez les fléchettes de la cible.")
 	while True:
-		if keyboard.is_pressed("esc"):
-			raise KeyboardInterrupt
-		if keyboard.is_pressed("space"):
+		frames_actuelles = capturer_images_courantes(cameras)
+		if images_identiques(frames_actuelles, frames_reference):
+			print("[INFO] Cible vide détectée. La partie reprend dans 3 secondes...")
+			sleep(3.0)
 			break
 		sleep(0.1)
 
@@ -474,8 +496,6 @@ def attendre_reprise_apres_pause(
 		state.previous_mask = None
 		state.previous_count = 0
 
-	frames_reference = lire_images_reference(cameras)
-	print("[INFO] Reprise de la lecture du flux vidéo.")
 	return frames_reference
 
 
@@ -523,10 +543,9 @@ def main() -> None:
 			):
 				capture_en_attente = True
 				instant_detection = maintenant
-				print("Fléchette détectée, capture prévue dans 1 seconde.")
+				print("Fléchette détectée, capture prévue dans 1/2 seconde.")
 
 			if capture_en_attente and (maintenant - instant_detection) >= CAPTURE_DELAY_SECONDS:
-				# timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
 				frames_capturees = capturer_images_courantes(cameras)
 
 				# Sauvegarde des images capturées pour DEBUG par lance par caméra
@@ -538,18 +557,17 @@ def main() -> None:
 
 				# Analyse du lancer à partir des 3 images capturées
 				# Images trop grandes 1280x720, à redimensionner plus tard pour accélérer l'inférence
-				print("---Temps d'analyse : ~3 secondes---")
+				print("---Temps d'analyse : 4 secondes---")
 				analyser_lancer(learner, homographies, frames_capturees, camera_states)
 				lancers_depuis_pause += 1
 
 				capture_en_attente = False
 				derniere_capture = maintenant
 
-				# SI OK, ON PASSE AU LANCER SUIVANT)
 				print(f"\n--- En attente du lancer {nbLancer} ---")
 
 				if lancers_depuis_pause >= LANCERS_PAR_SERIE:
-					frames_reference = attendre_reprise_apres_pause(cameras, camera_states)
+					frames_reference = attendre_reprise_apres_pause(cameras, camera_states, frames_reference)
 					previous_gray = {
 						camera_id: preparer_image_pour_difference(frame)
 						for camera_id, frame in frames_reference.items()
@@ -557,13 +575,13 @@ def main() -> None:
 					capture_en_attente = False
 					derniere_capture = monotonic()
 					lancers_depuis_pause = 0
-					print(f"\n--- Nouvelle série, en attente du lancer {nbLancer} ---")
+					print(f"\n--- En attente du lancer {nbLancer} ---")
 					continue
 
 			# Mise à jour des images de référence pour la prochaine différence de frame.
 			previous_gray = current_gray
 
-			if keyboard.is_pressed('esc'):
+			if keyboard.is_pressed('space'):
 				print("Fin de la partie.")
 				break
 	finally:
