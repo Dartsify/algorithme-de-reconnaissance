@@ -182,8 +182,8 @@ def main() -> None:
 	# On utilise Path(__file__) pour construire des chemins relatifs au script.
 	# Cela évite les problèmes de chemins absolus quand le projet est déplacé.
 	base_dir = Path(__file__).parent / "image_test" / "homographie_mur"
-	camera_image_path = base_dir / "cam3_reference.jpg"
-	reference_image_path = base_dir / "cam_reference_general.jpg"
+	camera_image_path = base_dir / "old" / "cam3_reference.jpg"
+	reference_image_path = base_dir / 'new' / 'ref_mathias.jpg'
 
 	if not camera_image_path.exists():
 		raise FileNotFoundError(
@@ -310,43 +310,71 @@ def main() -> None:
 		dtype=np.float32,
 	)
 
-	# pts_dst contient les points exactement correspondants dans la vue de face.
-	pts_dst = np.array(
+	# pts_dst contient les points exactement correspondants dans la vue de face (reference prise avec cam de l'arceau, un peu inclinée)
+	# A ne pas utiliser pour l'homographie
+	# pts_dst = np.array(
+	# 	[
+	# 		[735.5, 113.9],  # position du point sur le bord supérieur du nombre visible 1 dans l'image de référence
+	# 		[799.1, 155.2],  # position du point sur le bord supérieur du nombre visible 18 dans l'image de référence
+	# 		[846.9, 216.4],  # position du point sur le bord supérieur du nombre visible 4 dans l'image de référence
+	# 		[875.0, 288.9],  # position du point sur le bord supérieur du nombre visible 13 dans l'image de référence
+	# 		[877.2, 367.6],  # position du point sur le bord supérieur du nombre visible 6 dans l'image de référence
+	# 		[854.7, 443.6],  # position du point sur le bord supérieur du nombre visible 10 dans l'image de référence
+	# 		[810.1, 508.9],  # position du point sur le bord supérieur du nombre visible 15 dans l'image de référence
+	# 		[745.7, 556.3],  # position du point sur le bord supérieur du nombre visible 2 dans l'image de référence
+	# 		[670.4, 580.7],  # position du point sur le bord supérieur du nombre visible 17 dans l'image de référence
+	# 		[591.2, 580.4],  # position du point sur le bord supérieur du nombre visible 3 dans l'image de référence
+	# 		[516.2, 554.3],  # position du point sur le bord supérieur du nombre visible 16 dans l'image de référence
+	# 		[453.9, 506.8],  # position du point sur le bord supérieur du nombre visible 7 dans l'image de référence
+	# 		[409.3, 444.0],  # position du point sur le bord supérieur du nombre visible 19 dans l'image de référence
+	# 		[387.8, 371.3],  # position du point sur le bord supérieur du nombre visible 8 dans l'image de référence
+	# 		[387.8, 295.3],  # position du point sur le bord supérieur du nombre visible 11 dans l'image de référence
+	# 		[411.9, 223.0],  # position du point sur le bord supérieur du nombre visible 14 dans l'image de référence
+	# 		[457.0, 162.3],  # position du point sur le bord supérieur du nombre visible 9 dans l'image de référence
+	# 		[516.2, 117.4],  # position du point sur le bord supérieur du nombre visible 12 dans l'image de référence
+	# 		[587.7, 93.8],   # position du point sur le bord supérieur du nombre visible 5 dans l'image de référence
+	# 		[662.5, 91.6],   # position du point sur le bord supérieur du nombre visible 20 dans l'image de référence
+	# 	],
+	# 	dtype=np.float32,
+	# )
+
+	# pts_dst contient les points exactement correspondants dans la vue de face.(ref mathias iPhone)
+	pts_ref_iphone = np.array(
 		[
-			[735.5, 113.9],  # position du point sur le bord supérieur du nombre visible 1 dans l'image de référence
-			[799.1, 155.2],  # position du point sur le bord supérieur du nombre visible 18 dans l'image de référence
-			[846.9, 216.4],  # position du point sur le bord supérieur du nombre visible 4 dans l'image de référence
-			[875.0, 288.9],  # position du point sur le bord supérieur du nombre visible 13 dans l'image de référence
-			[877.2, 367.6],  # position du point sur le bord supérieur du nombre visible 6 dans l'image de référence
-			[854.7, 443.6],  # position du point sur le bord supérieur du nombre visible 10 dans l'image de référence
-			[810.1, 508.9],  # position du point sur le bord supérieur du nombre visible 15 dans l'image de référence
-			[745.7, 556.3],  # position du point sur le bord supérieur du nombre visible 2 dans l'image de référence
-			[670.4, 580.7],  # position du point sur le bord supérieur du nombre visible 17 dans l'image de référence
-			[591.2, 580.4],  # position du point sur le bord supérieur du nombre visible 3 dans l'image de référence
-			[516.2, 554.3],  # position du point sur le bord supérieur du nombre visible 16 dans l'image de référence
-			[453.9, 506.8],  # position du point sur le bord supérieur du nombre visible 7 dans l'image de référence
-			[409.3, 444.0],  # position du point sur le bord supérieur du nombre visible 19 dans l'image de référence
-			[387.8, 371.3],  # position du point sur le bord supérieur du nombre visible 8 dans l'image de référence
-			[387.8, 295.3],  # position du point sur le bord supérieur du nombre visible 11 dans l'image de référence
-			[411.9, 223.0],  # position du point sur le bord supérieur du nombre visible 14 dans l'image de référence
-			[457.0, 162.3],  # position du point sur le bord supérieur du nombre visible 9 dans l'image de référence
-			[516.2, 117.4],  # position du point sur le bord supérieur du nombre visible 12 dans l'image de référence
-			[587.7, 93.8],   # position du point sur le bord supérieur du nombre visible 5 dans l'image de référence
-			[662.5, 91.6],   # position du point sur le bord supérieur du nombre visible 20 dans l'image de référence
+			[755.8, 131.9],  # position du point sur le bord supérieur du nombre visible 1 dans l'image de référence
+			[820.0, 178.9],  # position du point sur le bord supérieur du nombre visible 18 dans l'image de référence
+			[867.0, 241.9],  # position du point sur le bord supérieur du nombre visible 4 dans l'image de référence
+			[891.0, 317.2],  # position du point sur le bord supérieur du nombre visible 13 dans l'image de référence
+			[891.8, 395.8],  # position du point sur le bord supérieur du nombre visible 6 dans l'image de référence
+			[868.0, 471.1],  # position du point sur le bord supérieur du nombre visible 10 dans l'image de référence
+			[822.2, 534.8],  # position du point sur le bord supérieur du nombre visible 15 dans l'image de référence
+			[758.0, 581.6],  # position du point sur le bord supérieur du nombre visible 2 dans l'image de référence
+			[684.1, 607.0],  # position du point sur le bord supérieur du nombre visible 17 dans l'image de référence
+			[605.9, 607.7],  # position du point sur le bord supérieur du nombre visible 3 dans l'image de référence
+			[529.5, 583.5],  # position du point sur le bord supérieur du nombre visible 16 dans l'image de référence
+			[465.5, 537.8],  # position du point sur le bord supérieur du nombre visible 7 dans l'image de référence
+			[418.3, 473.9],  # position du point sur le bord supérieur du nombre visible 19 dans l'image de référence
+			[393.0, 398.6],  # position du point sur le bord supérieur du nombre visible 8 dans l'image de référence
+			[391.9, 320.6],  # position du point sur le bord supérieur du nombre visible 11 dans l'image de référence
+			[416.0, 244.2],  # position du point sur le bord supérieur du nombre visible 14 dans l'image de référence
+			[463.8, 179.7],  # position du point sur le bord supérieur du nombre visible 9 dans l'image de référence
+			[526.8, 132.5],  # position du point sur le bord supérieur du nombre visible 12 dans l'image de référence
+			[601.6, 107.8],  # position du point sur le bord supérieur du nombre visible 5 dans l'image de référence
+			[680.7, 107.9],  # position du point sur le bord supérieur du nombre visible 20 dans l'image de référence
 		],
 		dtype=np.float32,
 	)
 
 	# print("\nPoints source (image avec caméra inclinée) :")
 	# print(pts_src_cam1)
-	# print("\nPoints destination (image de référence) :")
+	# print("\nPoints desref_iphoneation (image de référence) :")
 	# print(pts_dst)
 
 	
 	# findHomography cherche la matrice H qui vérifie, pour chaque point source
 	# (x,y), la relation suivante : (x,y)' ~ H (x,y).
 	# Le symbole ~ signifie "égal à un facteur d'échelle près".
-	homography_matrix, _ = cv2.findHomography(pts_src_cam3, pts_dst)
+	homography_matrix, _ = cv2.findHomography(pts_src_cam3, pts_ref_iphone)
 
 	if homography_matrix is None:
 		raise RuntimeError(
@@ -361,7 +389,7 @@ def main() -> None:
 	# Le point d'exemple représente ici une position détectée de la pointe de la fléchette
 	# dans l'image prise avec caméra inclinée. On applique la transformation pour savoir où il
 	# se projette dans la vue corrigée de face.
-	test_point_camera = np.array([[[480, 430]]], dtype=np.float32)
+	test_point_camera = np.array([[[780, 400]]], dtype=np.float32)
 	test_point_camera_x = test_point_camera[0, 0, 0]
 	test_point_camera_y = test_point_camera[0, 0, 1]
 	# On applique la transformation d'homographie au point test (ici sur un seul point)
@@ -394,19 +422,19 @@ def main() -> None:
 	# placées sur les numéros choisis.
 	camera_image_with_points = draw_points(camera_image, pts_src_cam3, ["1", "18", "4", "13", "6", "10", "15", "2", "17", "3", "16", "7", "19", "8", "11", "14", "9", "12", "5", "20"])
 	camera_image_with_points = draw_points(camera_image_with_points,test_point_camera.reshape(1, 2),["Point test"])
-	cv2.imwrite(str(base_dir / "cam3_reference_avec_points.jpg"), camera_image_with_points)
+	cv2.imwrite(str(base_dir / 'new' / 'cam3_avec_points.jpg'), camera_image_with_points)
 
-	reference_image_with_points = draw_points(reference_image, pts_dst, ["1", "18", "4", "13", "6", "10", "15", "2", "17", "3", "16", "7", "19", "8", "11", "14", "9", "12", "5", "20"])
-	# cv2.imwrite(str(base_dir / "cam_reference_general_avec_points.jpg"), reference_image_with_points)
+	# reference_image_with_points = draw_points(reference_image, pts_ref_iphone, ["1", "18", "4", "13", "6", "10", "15", "2", "17", "3", "16", "7", "19", "8", "11", "14", "9", "12", "5", "20"])
+	# cv2.imwrite(str(base_dir / 'new' / 'ref_iphone_avec_points.jpg'), reference_image_with_points)
 
 	# enregistre l'image corrigée pour pouvoir la comparer avec les résultats du modèle IA
-	circle_center, circle_radius = detect_concentric_circles(corrected_image)
-	print("\nCentre des cercles détecté :", circle_center)
-	print("Rayon détecté :", circle_radius)
+	# circle_center, circle_radius = detect_concentric_circles(corrected_image)
+	# print("\nCentre des cercles détecté :", circle_center)
+	# print("Rayon détecté :", circle_radius)
 
-	corrected_image = draw_points(corrected_image, transformed_point.reshape(1, 2), ["Point test corrige"])
-	# corrected_image = draw_concentric_circles(corrected_image, (627,329), circle_radius)
-	cv2.imwrite(str(base_dir / "cam3_homographie_avec_points.jpg"), corrected_image)
+	corrected_image = draw_points(corrected_image,transformed_point.reshape(1, 2),["Point test corrige"])
+	# corrected_image = draw_concentric_circles(corrected_image, circle_center, circle_radius)
+	cv2.imwrite(str(base_dir / 'new' / 'cam3_homographie_avec_points.jpg'), corrected_image)
 
 
 	# -------------------------------------------------------------------------
@@ -418,7 +446,7 @@ def main() -> None:
 	# rz_reference_image_with_points = cv2.resize(reference_image_with_points, (WIDTH_RESIZE, HEIGHT_RESIZE))
 	# rz_corrected_image = cv2.resize(corrected_image, (WIDTH_RESIZE, HEIGHT_RESIZE))
 
-	# cv2.imshow("Image originale - camera inclinee", camera_image_with_points)
+	cv2.imshow("Image originale - camera inclinee", camera_image_with_points)
 	# cv2.imshow("Image de reference", reference_image_with_points)
 	# cv2.imshow("Image corrigee", rz_corrected_image)
 	plt.title("Image corrigée (homographie)")

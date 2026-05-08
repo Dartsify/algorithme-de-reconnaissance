@@ -11,9 +11,9 @@ from datetime import datetime
 from random import randint
 import concurrent.futures # pour le traitement en parallèle des caméras
 
-message = ["Bien joué !!!!!!!", "T'es trop belle LAURINE", "Allez ! Encore quelques images et c'est bon", "Continue comme ça", "Excellent !!", "Oh le champion !", "Parfait", "Magnifique !", "Le modèle IA va en manger !", "Incroyable !!", "Fantastique !"]
+message = ["Bien joué !!!!!!!", "Allez ! Encore quelques images et c'est bon", "Continue comme ça", "Excellent !!", "Oh le champion !", "Parfait", "Magnifique !", "Le modèle IA va en manger !", "Incroyable !!", "Fantastique !"]
 
-DATASET_DIR = Path('Dartsify_mur/dataset/')
+DATASET_DIR = Path('Dartsify/dataset/')
 DATASET_DIR.mkdir(parents=True, exist_ok=True)
 HEIGHT, WIDTH = 720, 1280
 

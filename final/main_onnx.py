@@ -31,7 +31,7 @@ import onnxruntime as ort
 PROJECT_ROOT = Path(__file__).resolve().parent
 IMAGE_DIR = PROJECT_ROOT / "saved_images"
 HOMOGRAPHY_FILE = PROJECT_ROOT / "matrice_homographie"
-MODEL_PATH = PROJECT_ROOT / "dartsify_ai_radius15.onnx"
+MODEL_PATH = PROJECT_ROOT / "dartsify_ai_final_radius15_vertical_ft.onnx"
 
 IMAGE_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -39,7 +39,7 @@ IMAGE_DIR.mkdir(parents=True, exist_ok=True)
 # MOTION_PIXEL_THRESHOLD = 25
 MOTION_PIXEL_THRESHOLD = 25
 # MOTION_AREA_THRESHOLD = 4000
-MOTION_AREA_THRESHOLD = 15000
+MOTION_AREA_THRESHOLD = 7000
 CAPTURE_DELAY_SECONDS = 1.0
 CAPTURE_COOLDOWN_SECONDS = 1.0
 
@@ -52,7 +52,7 @@ MIN_DART_CONTOUR_AREA = 600 # Seuil d'aire pour filtrer les contours de fléchet
 MASK_MORPH_KERNEL_SIZE = 3 # Nettoyage des masques
 
 # Paramètres backend
-API_URL = os.getenv("DARTS_API_URL", "http://100.107.205.98/throws/")
+API_URL = os.getenv("DARTS_API_URL", "http://127.0.0.1:8000/throws/")
 API_KEY = os.getenv("DARTS_API_KEY", "super_secret_key_for_raspberry_api_12345")
 TARGET_ID = os.getenv("DARTS_TARGET_ID", "000001")
 
@@ -166,7 +166,6 @@ def calculer_score_mouvement(image_precedente: np.ndarray, image_actuelle: np.nd
 		255,
 		cv2.THRESH_BINARY,
 	)
-	# Explicit kernel to satisfy type-checkers (None can be accepted by OpenCV at runtime)
 	kernel = np.ones((3, 3), dtype=np.uint8)
 	difference_binaire = cv2.dilate(difference_binaire, kernel, iterations=2)
 	contours, _ = cv2.findContours(difference_binaire, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
@@ -181,13 +180,12 @@ def charger_modele():
     session = ort.InferenceSession(str(MODEL_PATH), providers=['CPUExecutionProvider'])
     return session
 
-def compter_flechettes_dans_masque(mask: np.ndarray) -> int:
+def compter_flechettes_dans_masque(mask: np.ndarray, seuil: float = MIN_DART_CONTOUR_AREA) -> int:
 	"""Compte les contours valides du masque, assimilés aux fléchettes détectées."""
 
 	# cv2.RETR_TREE : tous les contours, y compris les trous internes
 	contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE) #uniquement les contours externes
-	contours_valides = [contour for contour in contours if cv2.contourArea(contour) >= MIN_DART_CONTOUR_AREA]
-	return len(contours_valides)
+	return sum(1 for c in contours if cv2.contourArea(c) >= seuil)
 
 
 def choisir_camera_detection(detections: list[CameraDetection]) -> CameraDetection:
@@ -220,12 +218,12 @@ def isoler_nouvelle_fleche(mask_actuel: np.ndarray, masque_precedent: np.ndarray
 	return masque_difference
 
 
-def extraire_point_cible(mask: np.ndarray) -> tuple[int, int] | None:
+def extraire_point_cible(mask: np.ndarray, seuil: float = MIN_DART_CONTOUR_AREA) -> tuple[int, int] | None:
 	"""Récupère la position (x, y) du centre du plus grand contour du masque."""
 
 	# cv2.RETR_TREE tous les contours, y compris les trous internes
 	contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE) #uniquement les contours externes
-	contours = [contour for contour in contours if cv2.contourArea(contour) >= MIN_DART_CONTOUR_AREA]
+	contours = [contour for contour in contours if cv2.contourArea(contour) >= seuil]
 	if not contours:
 		return None
 
@@ -338,13 +336,7 @@ def analyser_lancer(
     for i, camera_id in enumerate(camera_ids):
         mask = liste_masques[i]
     
-        # On passe notre seuil adapté à la fonction de comptage (il faudra modifier votre fonction
-        # compter_flechettes_dans_masque pour qu'elle accepte un paramètre de seuil optionnel)
-        # count = compter_flechettes_dans_masque(mask, seuil=SEUIL_AIRE_REDIMENSIONNE)
-
-        # Pour faire simple ici sans modifier votre autre fonction, faisons le comptage en ligne :
-        contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        count = sum(1 for c in contours if cv2.contourArea(c) >= SEUIL_AIRE_REDIMENSIONNE)
+        count = compter_flechettes_dans_masque(mask, seuil=SEUIL_AIRE_REDIMENSIONNE)
 
         detections.append(CameraDetection(camera_id=camera_id, mask=mask, dart_count=count))
         print(f"[INFO] Caméra {camera_id} : {count} fléchette(s) détectée(s).")
@@ -366,6 +358,9 @@ def analyser_lancer(
             cx = int(moments["m10"] / moments["m00"])
             cy = int(moments["m01"] / moments["m00"])
             point_camera = (cx, cy)
+        else:
+            x, y, largeur, hauteur = cv2.boundingRect(contour_principal)
+            point_camera = (x + largeur // 2, y + hauteur // 2)
 
     if point_camera is None:
         print(f"[ERREUR] Impossible d'extraire la position sur la caméra {camera_choisie.camera_id}.")
