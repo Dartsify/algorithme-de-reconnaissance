@@ -36,7 +36,7 @@ camera_index = [3, 0, 2] # Les index des 3 caméras
 with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
 	# Lance les 3 ouvertures exactement au même moment
 	resultats = list(executor.map(ouvrir_une_camera, camera_index))
-	print("Résultats de l'ouverture des caméras :", resultats)
+	print("Résultats de l'ouverture des caméras : ", resultats)
 
 	cameras_ouvertes = {camera_id: cap for camera_id, cap in resultats if cap is not None}
 	if len(cameras_ouvertes) != len(camera_index):

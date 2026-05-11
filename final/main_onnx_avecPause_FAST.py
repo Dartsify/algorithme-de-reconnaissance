@@ -12,6 +12,7 @@ from pathlib import Path
 from time import monotonic, sleep
 import keyboard
 import concurrent.futures # pour le traitement en parallèle des caméras
+import threading
 
 import cv2
 import numpy as np
@@ -38,7 +39,7 @@ MOTION_PIXEL_THRESHOLD = 25 # Seuil de changement de pixel pour détecter le mou
 # MOTION_PIXEL_THRESHOLD = 25
 # MOTION_AREA_THRESHOLD = 4000
 MOTION_AREA_THRESHOLD = 7000 # Seuil de surface de mouvement pour déclencher la capture (ajusté pour éviter les faux positifs liés au bruit)
-CAPTURE_DELAY_SECONDS = 0.5 # Temps entre la détection du mouvement et la capture des images (pour laisser le temps à la fléchette de se stabiliser)
+CAPTURE_DELAY_SECONDS = 0.4 # Temps entre la détection du mouvement et la capture des images (pour laisser le temps à la fléchette de se stabiliser)
 CAPTURE_COOLDOWN_SECONDS = 1.0 # Temps minimum entre deux captures pour éviter les faux positifs successifs
 LANCERS_PAR_SERIE = 3 # Nombre de lancers avant de demander une pause pour retirer les fléchettes
 PAUSE_REFERENCE_PIXEL_THRESHOLD = 10 # Seuil de changement de pixel pour considérer que la cible a été modifiée (pour la pause)
@@ -258,15 +259,20 @@ def envoyer_point_au_backend(x_impact: float, y_impact: float, camera_id: int) -
 		"camera_id": camera_id,
 	}
 
-	try:
-		response = requests.post(API_URL, json=payload, headers=HEADERS, timeout=15)
-		if response.status_code == 200:
-			data = response.json()
-			print(f"[INFO] Fléchette enregistrée par le serveur (multiplicateur x{data.get('multiplier', '?')}).")
-		else:
-			print(f"[ERREUR] Erreur API : {response.status_code} - {response.text}")
-	except requests.exceptions.RequestException as exc:
-		print(f"[ERREUR] Erreur de connexion au serveur : {exc}")
+
+	def sendCoord():
+		try:
+			response = requests.post(API_URL, json=payload, headers=HEADERS, timeout=15)
+			if response.status_code == 200:
+				data = response.json()
+				print(f"[INFO] Fléchette enregistrée par le serveur (multiplicateur x{data.get('multiplier', '?')}).")
+			else:
+				print(f"[ERREUR] Erreur API : {response.status_code} - {response.text}")
+		except requests.exceptions.RequestException as exc:
+			print(f"[ERREUR] Erreur de connexion au serveur : {exc}")
+
+	# On lance l'envoi en arrière-plan !
+	threading.Thread(target=sendCoord, daemon=True).start()
 
 def analyser_lancer(
     ort_session, # On passe la session ONNX ici (anciennement learner)
@@ -419,16 +425,33 @@ def lire_images_reference(cameras):
 	return frames
 
 
-def capturer_images_courantes(cameras):
-	"""Lit une image sur chacune des 3 caméras."""
+# def capturer_images_courantes(cameras):
+# 	"""Lit une image sur chacune des 3 caméras."""
 
-	frames = {}
-	for camera_id, camera in cameras.items():
-		success, frame = camera.read()
-		if not success:
-			raise RuntimeError(f"[ERREUR] Impossible de lire le flux vidéo de la caméra {camera_id}.")
-		frames[camera_id] = frame
-	return frames
+# 	frames = {}
+# 	for camera_id, camera in cameras.items():
+# 		success, frame = camera.read()
+# 		if not success:
+# 			raise RuntimeError(f"[ERREUR] Impossible de lire le flux vidéo de la caméra {camera_id}.")
+# 		frames[camera_id] = frame
+# 	return frames
+
+def capturer_images_courantes(cameras):
+    """Lit une image sur chacune des 3 caméras de manière synchronisée."""
+    frames = {}
+    
+    # ordonne aux 3 caméras de figer la frame (très rapide)
+    for camera in cameras.values():
+        camera.grab()
+        
+    # récupère et décode les frames figées (plus lent, mais elles sont synchros !)
+    for camera_id, camera in cameras.items():
+        success, frame = camera.retrieve()
+        if not success:
+            raise RuntimeError(f"[ERREUR] Impossible de lire le flux de la caméra {camera_id}.")
+        frames[camera_id] = frame
+        
+    return frames
 
 
 def images_identiques(frames_a, frames_b):
@@ -438,6 +461,9 @@ def images_identiques(frames_a, frames_b):
 		return False
 
 	for camera_id in frames_a:
+		if frames_a[camera_id] is None or frames_b[camera_id] is None:
+			return False
+
 		reference_gray = preparer_image_pour_difference(frames_b[camera_id])
 		current_gray = preparer_image_pour_difference(frames_a[camera_id])
 
@@ -465,12 +491,17 @@ def attendre_reprise_apres_pause(
 
 	stop = False
 	while True:
-		frames_actuelles = capturer_images_courantes(cameras)
-		if images_identiques(frames_actuelles, frames_reference):
-			print("[INFO] La cible est vide. La partie reprend dans 2 secondes...")
-			sleep(2.0)
-			print("[INFO] Go ! c'est reparti !\n")
-			break
+		try:
+			frames_actuelles = capturer_images_courantes(cameras)
+			if images_identiques(frames_actuelles, frames_reference):
+				print("[INFO] La cible est vide. La partie reprend dans 2 secondes...")
+				sleep(2.0)
+				print("[INFO] Go ! c'est reparti !\n")
+				break
+		except RuntimeError as exc:
+			print(f"[WARN] Lecture caméra temporairement indisponible pendant la pause : {exc}")
+			sleep(0.5)
+			continue
 		sleep(0.1)
 
 		if keyboard.is_pressed('space'):
