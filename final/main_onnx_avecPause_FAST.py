@@ -39,7 +39,7 @@ MOTION_PIXEL_THRESHOLD = 25 # Seuil de changement de pixel pour détecter le mou
 # MOTION_PIXEL_THRESHOLD = 25
 # MOTION_AREA_THRESHOLD = 4000
 MOTION_AREA_THRESHOLD = 6000 # Seuil de surface de mouvement pour déclencher la capture (ajusté pour éviter les faux positifs liés au bruit)
-CAPTURE_DELAY_SECONDS = 0.4 # Temps entre la détection du mouvement et la capture des images (pour laisser le temps à la fléchette de se stabiliser)
+CAPTURE_DELAY_SECONDS = 0.6 # Temps entre la détection du mouvement et la capture des images (pour laisser le temps à la fléchette de se stabiliser)
 CAPTURE_COOLDOWN_SECONDS = 1.0 # Temps minimum entre deux captures pour éviter les faux positifs successifs
 LANCERS_PAR_SERIE = 3 # Nombre de lancers avant de demander une pause pour retirer les fléchettes
 PAUSE_REFERENCE_PIXEL_THRESHOLD = 10 # Seuil de changement de pixel pour considérer que la cible a été modifiée (pour la pause)
@@ -51,7 +51,7 @@ MASK_CLASS_INDEX = 1 # Classe Point
 # rayon 12 : 400
 # rayon 10 : 300
 # rayon 5 : 70
-MIN_DART_CONTOUR_AREA = 600 # Seuil d'aire pour filtrer les contours de fléchettes valides avec les fausses détections
+MIN_DART_CONTOUR_AREA = 200 # Seuil d'aire pour filtrer les contours de fléchettes valides avec les fausses détections
 MASK_MORPH_KERNEL_SIZE = 3 # Nettoyage des masques
 
 # Paramètres backend
@@ -287,9 +287,9 @@ def analyser_lancer(
 	"""Analyse un lancer complet en envoyant les 3 images redimensionnées en MÊME TEMPS à l'IA."""
 	t_debut_analyse = monotonic() # CHRONO DEBUT ANALYSE
 
-	SCALE_FACTOR = 4
-	NEW_WIDTH = 1280 // SCALE_FACTOR  # 640
-	NEW_HEIGHT = 720 // SCALE_FACTOR  # 360
+	SCALE_FACTOR = 2
+	NEW_WIDTH = 1280 // SCALE_FACTOR
+	NEW_HEIGHT = 720 // SCALE_FACTOR
 
 	def predire_masques_en_lot(ort_session, liste_frames_bgr: list[np.ndarray]):
 		"""Inférence ultra-rapide d'un lot d'images via ONNX Runtime."""
@@ -336,7 +336,7 @@ def analyser_lancer(
 		kernel = np.ones((kernel_size, kernel_size), np.uint8)
 		for i in range(len(liste_frames_bgr)):
 			masque_numpy = (masques_batch[i] == MASK_CLASS_INDEX).astype(np.uint8) * 255
-			masque_numpy = cv2.morphologyEx(masque_numpy, cv2.MORPH_OPEN, kernel, iterations=1)
+			# masque_numpy = cv2.morphologyEx(masque_numpy, cv2.MORPH_OPEN, kernel, iterations=1)
 			masque_numpy = cv2.morphologyEx(masque_numpy, cv2.MORPH_CLOSE, kernel, iterations=1)
 			liste_masques_finaux.append(masque_numpy)
 		print(f"[INFO] Post-traitement des masques : {(monotonic() - t_morph_start):.3f} secondes")
@@ -392,11 +392,8 @@ def ouvrir_une_camera(camera_id):
     cap = cv2.VideoCapture(camera_id, cv2.CAP_MSMF) # on force explicitement l'api MSMF
 
     if cap.isOpened():
-        # Force la résolution 720p
         cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
         cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
-
-		# --- Bloquer l'adaptation automatique de la lumière ---
         cap.set(cv2.CAP_PROP_AUTO_EXPOSURE, 0)
         return camera_id, cap
     else:
@@ -404,38 +401,31 @@ def ouvrir_une_camera(camera_id):
         return camera_id, None
 
 def ouvrir_cameras() -> dict[int, cv2.VideoCapture]:
-	"""Ouvre les 3 caméras en parallèle"""
-	cameras_ouvertes = {}
-	camera_index = [3, 2, 1] # Les index des 3 caméras
-	
-	with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
-		# Lance les 3 ouvertures exactement au même moment
-		resultats = executor.map(ouvrir_une_camera, camera_index)
-		
-		for camera_index, cap in resultats:
-			# cam 1 -> indice 3
-			# cam 2 -> indice 2
-			# cam 3 -> indice 1
-			mapping = {3: 1, 2: 2, 1: 3} # Mapping des indices physiques vers les numéros des caméras tels que mis sur leur support
-			num_camera = mapping.get(camera_index)
-			if cap is not None:
-				cameras_ouvertes[num_camera] = cap
-			else:
-				raise RuntimeError(f"[ERREUR] Impossible d'ouvrir la caméra {num_camera}.")
-			
-	return cameras_ouvertes
+    """Ouvre les 3 caméras en parallèle"""
+    cameras_ouvertes = {}
+    camera_index = [3, 2, 1] # Les index des 3 caméras
+    with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
+        resultats = executor.map(ouvrir_une_camera, camera_index)
+        for camera_index, cap in resultats:
+            mapping = {3: 1, 2: 2, 1: 3} # Mapping des indices physiques vers les numéros des caméras tels que mis sur leur support
+            num_camera = mapping.get(camera_index)
+            if cap is not None:
+                cameras_ouvertes[num_camera] = cap
+            else:
+                raise RuntimeError(f"[ERREUR] Impossible d'ouvrir la caméra {num_camera}.")
+    return cameras_ouvertes
 
 
 def lire_images_reference(cameras):
-	"""Lit une image de référence pour chaque caméra au démarrage."""
+    """Lit une image de référence pour chaque caméra au démarrage."""
 
-	frames = {}
-	for camera_id, camera in cameras.items():
-		success, frame = camera.read()
-		if not success:
-			raise RuntimeError(f"[ERREUR] Impossible d'initialiser l'image de référence de la caméra {camera_id}.")
-		frames[camera_id] = frame
-	return frames
+    frames = {}
+    for camera_id, camera in cameras.items():
+        success, frame = camera.read()
+        if not success:
+            raise RuntimeError(f"[ERREUR] Impossible d'initialiser l'image de référence de la caméra {camera_id}.")
+        frames[camera_id] = frame
+    return frames
 
 
 # def capturer_images_courantes(cameras):
