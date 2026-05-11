@@ -31,14 +31,13 @@ PROJECT_ROOT = Path(__file__).resolve().parent
 IMAGE_DIR = PROJECT_ROOT / "saved_images"
 HOMOGRAPHY_FILE = PROJECT_ROOT / "matrice_homographie"
 MODEL_PATH = PROJECT_ROOT / "models_onnx" / "model_a_tester" / "final_resnet34_r15_1500.onnx"
-# MODEL_PATH = PROJECT_ROOT / "models_onnx" / "model_a_tester" / "dartsify_ai_final_radius15_vertical_ft.onnx"
 
 IMAGE_DIR.mkdir(parents=True, exist_ok=True)
 # Paramètres de détection du mouvement
 MOTION_PIXEL_THRESHOLD = 25 # Seuil de changement de pixel pour détecter le mouvement
 # MOTION_PIXEL_THRESHOLD = 25
 # MOTION_AREA_THRESHOLD = 4000
-MOTION_AREA_THRESHOLD = 6000 # Seuil de surface de mouvement pour déclencher la capture (ajusté pour éviter les faux positifs liés au bruit)
+MOTION_AREA_THRESHOLD = 7000 # Seuil de surface de mouvement pour déclencher la capture (ajusté pour éviter les faux positifs liés au bruit)
 CAPTURE_DELAY_SECONDS = 0.5 # Temps entre la détection du mouvement et la capture des images (pour laisser le temps à la fléchette de se stabiliser)
 CAPTURE_COOLDOWN_SECONDS = 1.0 # Temps minimum entre deux captures pour éviter les faux positifs successifs
 LANCERS_PAR_SERIE = 3 # Nombre de lancers avant de demander une pause pour retirer les fléchettes
@@ -51,7 +50,7 @@ MASK_CLASS_INDEX = 1 # Classe Point
 # rayon 12 : 400
 # rayon 10 : 300
 # rayon 5 : 70
-MIN_DART_CONTOUR_AREA = 600 # Seuil d'aire pour filtrer les contours de fléchettes valides avec les fausses détections
+MIN_DART_CONTOUR_AREA = 300 # Seuil d'aire pour filtrer les contours de fléchettes valides avec les fausses détections
 MASK_MORPH_KERNEL_SIZE = 3 # Nettoyage des masques
 
 # Paramètres backend
@@ -388,7 +387,7 @@ def ouvrir_une_camera(camera_id):
 def ouvrir_cameras() -> dict[int, cv2.VideoCapture]:
 	"""Ouvre les 3 caméras en parallèle"""
 	cameras_ouvertes = {}
-	camera_index = [3, 2, 1] # Les index des 3 caméras
+	camera_index = [3, 0, 2] # Les index des 3 caméras
 	
 	with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
 		# Lance les 3 ouvertures exactement au même moment
@@ -398,7 +397,7 @@ def ouvrir_cameras() -> dict[int, cv2.VideoCapture]:
 			# cam 1 -> indice 3
 			# cam 2 -> indice 2
 			# cam 3 -> indice 1
-			mapping = {3: 1, 2: 2, 1: 3} # Mapping des indices physiques vers les numéros des caméras tels que mis sur leur support
+			mapping = {3: 1, 0: 2, 2: 3} # Mapping des indices physiques vers les numéros des caméras tels que mis sur leur support
 			num_camera = mapping.get(camera_index)
 			if cap is not None:
 				cameras_ouvertes[num_camera] = cap

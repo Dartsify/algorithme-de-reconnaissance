@@ -38,7 +38,7 @@ IMAGE_DIR.mkdir(parents=True, exist_ok=True)
 MOTION_PIXEL_THRESHOLD = 25 # Seuil de changement de pixel pour détecter le mouvement
 # MOTION_PIXEL_THRESHOLD = 25
 # MOTION_AREA_THRESHOLD = 4000
-MOTION_AREA_THRESHOLD = 7000 # Seuil de surface de mouvement pour déclencher la capture (ajusté pour éviter les faux positifs liés au bruit)
+MOTION_AREA_THRESHOLD = 6000 # Seuil de surface de mouvement pour déclencher la capture (ajusté pour éviter les faux positifs liés au bruit)
 CAPTURE_DELAY_SECONDS = 0.4 # Temps entre la détection du mouvement et la capture des images (pour laisser le temps à la fléchette de se stabiliser)
 CAPTURE_COOLDOWN_SECONDS = 1.0 # Temps minimum entre deux captures pour éviter les faux positifs successifs
 LANCERS_PAR_SERIE = 3 # Nombre de lancers avant de demander une pause pour retirer les fléchettes
@@ -51,7 +51,7 @@ MASK_CLASS_INDEX = 1 # Classe Point
 # rayon 12 : 400
 # rayon 10 : 300
 # rayon 5 : 70
-MIN_DART_CONTOUR_AREA = 300 # Seuil d'aire pour filtrer les contours de fléchettes valides avec les fausses détections
+MIN_DART_CONTOUR_AREA = 600 # Seuil d'aire pour filtrer les contours de fléchettes valides avec les fausses détections
 MASK_MORPH_KERNEL_SIZE = 3 # Nettoyage des masques
 
 # Paramètres backend
@@ -261,11 +261,15 @@ def envoyer_point_au_backend(x_impact: float, y_impact: float, camera_id: int) -
 
 
 	def sendCoord():
+		t_req_start	= monotonic() # CHRONO RESEAU
 		try:
 			response = requests.post(API_URL, json=payload, headers=HEADERS, timeout=15)
+			t_req_end = monotonic()
+
 			if response.status_code == 200:
 				data = response.json()
 				print(f"[INFO] Fléchette enregistrée par le serveur (multiplicateur x{data.get('multiplier', '?')}).")
+				print(f"[CHRONO] Envoi API réussi en : {(t_req_end - t_req_start):.3f} secondes")
 			else:
 				print(f"[ERREUR] Erreur API : {response.status_code} - {response.text}")
 		except requests.exceptions.RequestException as exc:
@@ -280,99 +284,108 @@ def analyser_lancer(
     frames: dict[int, np.ndarray],
     states: dict[int, CameraState],
 ) -> None:
-    """Analyse un lancer complet en envoyant les 3 images redimensionnées en MÊME TEMPS à l'IA."""
+	"""Analyse un lancer complet en envoyant les 3 images redimensionnées en MÊME TEMPS à l'IA."""
+	t_debut_analyse = monotonic() # CHRONO DEBUT ANALYSE
 
-    SCALE_FACTOR = 2
-    NEW_WIDTH = 1280 // SCALE_FACTOR  # 640
-    NEW_HEIGHT = 720 // SCALE_FACTOR  # 360
+	SCALE_FACTOR = 4
+	NEW_WIDTH = 1280 // SCALE_FACTOR  # 640
+	NEW_HEIGHT = 720 // SCALE_FACTOR  # 360
 
-    def predire_masques_en_lot(ort_session, liste_frames_bgr: list[np.ndarray]) -> list[np.ndarray]:
-        """Inférence ultra-rapide d'un lot d'images via ONNX Runtime."""
-        input_batch = []
+	def predire_masques_en_lot(ort_session, liste_frames_bgr: list[np.ndarray]):
+		"""Inférence ultra-rapide d'un lot d'images via ONNX Runtime."""
+		input_batch = []
         
         # Moyenne et Écart-type standards de FastAI (ImageNet)
-        mean = np.array([0.485, 0.456, 0.406], dtype=np.float32)
-        std = np.array([0.229, 0.224, 0.225], dtype=np.float32)
+		mean = np.array([0.485, 0.456, 0.406], dtype=np.float32)
+		std = np.array([0.229, 0.224, 0.225], dtype=np.float32)
 
-        for img in liste_frames_bgr:
+		t_prep_start = monotonic() # CHRONO DEBUT PREP
+		for img in liste_frames_bgr:
             # Redimensionnement
-            img_resized = cv2.resize(img, (NEW_WIDTH, NEW_HEIGHT), interpolation=cv2.INTER_AREA)
+			img_resized = cv2.resize(img, (NEW_WIDTH, NEW_HEIGHT), interpolation=cv2.INTER_AREA)
             
             # Conversion BGR (OpenCV) vers RGB (Modèle IA)
-            img_rgb = cv2.cvtColor(img_resized, cv2.COLOR_BGR2RGB)
+			img_rgb = cv2.cvtColor(img_resized, cv2.COLOR_BGR2RGB)
             
             # Normalisation manuelle
-            img_normalized = img_rgb.astype(np.float32) / 255.0
-            img_normalized = (img_normalized - mean) / std
+			img_normalized = img_rgb.astype(np.float32) / 255.0
+			img_normalized = (img_normalized - mean) / std
             
             # Transposition: OpenCV donne (H, W, Canaux), ONNX attend (Canaux, H, W)
-            img_transposed = np.transpose(img_normalized, (2, 0, 1))
-            input_batch.append(img_transposed)
+			img_transposed = np.transpose(img_normalized, (2, 0, 1))
+			input_batch.append(img_transposed)
 
         # Empiler les 3 images pour faire un "Batch"
-        input_tensor = np.array(input_batch, dtype=np.float32)
+		input_tensor = np.array(input_batch, dtype=np.float32)
+		print(f"[INFO] Préparation des images pour modèle : {(monotonic() - t_prep_start):.3f} secondes")
 
-        input_name = ort_session.get_inputs()[0].name
-        ort_outs = ort_session.run(None, {input_name: input_tensor})
+		t_onnx_start = monotonic() # CHRONO DEBUT ONNX
+		input_name = ort_session.get_inputs()[0].name
+		ort_outs = ort_session.run(None, {input_name: input_tensor})
         
         # ort_outs[0] a la forme (3, 2, H, W)
-        preds = ort_outs[0]
+		preds = ort_outs[0]
 
         # Argmax sur la dimension des classes
-        masques_batch = np.argmax(preds, axis=1) # Résultat : (3, H, W) avec des 0 et des 1
-        
-        liste_masques_finaux = []
-        kernel_size = max(1, MASK_MORPH_KERNEL_SIZE // SCALE_FACTOR)
-        kernel = np.ones((kernel_size, kernel_size), np.uint8)
-        for i in range(len(liste_frames_bgr)):
-            masque_numpy = (masques_batch[i] == MASK_CLASS_INDEX).astype(np.uint8) * 255
-            masque_numpy = cv2.morphologyEx(masque_numpy, cv2.MORPH_OPEN, kernel, iterations=1)
-            masque_numpy = cv2.morphologyEx(masque_numpy, cv2.MORPH_CLOSE, kernel, iterations=1)
-            liste_masques_finaux.append(masque_numpy)
-        return liste_masques_finaux
+		masques_batch = np.argmax(preds, axis=1) # Résultat : (3, H, W) avec des 0 et des 1
+		print(f"[INFO] Inférence IA Runtime : {(monotonic() - t_onnx_start):.3f} secondes")
 
-    camera_ids = list(frames.keys())
-    liste_images = [frames[cam_id] for cam_id in camera_ids]
-    liste_masques = predire_masques_en_lot(ort_session, liste_images)
+		t_morph_start = monotonic() # CHRONO POST-TRAITEMENT
+		liste_masques_finaux = []
+		kernel_size = max(1, MASK_MORPH_KERNEL_SIZE // SCALE_FACTOR)
+		kernel = np.ones((kernel_size, kernel_size), np.uint8)
+		for i in range(len(liste_frames_bgr)):
+			masque_numpy = (masques_batch[i] == MASK_CLASS_INDEX).astype(np.uint8) * 255
+			masque_numpy = cv2.morphologyEx(masque_numpy, cv2.MORPH_OPEN, kernel, iterations=1)
+			masque_numpy = cv2.morphologyEx(masque_numpy, cv2.MORPH_CLOSE, kernel, iterations=1)
+			liste_masques_finaux.append(masque_numpy)
+		print(f"[INFO] Post-traitement des masques : {(monotonic() - t_morph_start):.3f} secondes")
+		return liste_masques_finaux
 
-    detections = []
+	camera_ids = list(frames.keys())
+	liste_images = [frames[cam_id] for cam_id in camera_ids]
+	liste_masques = predire_masques_en_lot(ort_session, liste_images)
 
-    # NOUVEAU : Adapter le seuil d'aire car l'image est 4x plus petite
-    SEUIL_AIRE_REDIMENSIONNE = MIN_DART_CONTOUR_AREA // (SCALE_FACTOR ** 2)
+	t_logic_start = monotonic() # CHRONO LOGIQUE METIER
+	detections = []
 
-    for i, camera_id in enumerate(camera_ids):
-        mask = liste_masques[i]
-    
-        count = compter_flechettes_dans_masque(mask, seuil=SEUIL_AIRE_REDIMENSIONNE)
+    # Adapter le seuil d'aire car l'image est 4x plus petite
+	SEUIL_AIRE_REDIMENSIONNE = MIN_DART_CONTOUR_AREA // (SCALE_FACTOR ** 2)
 
-        detections.append(CameraDetection(camera_id=camera_id, mask=mask, dart_count=count))
-        print(f"[INFO] Caméra {camera_id} : {count} fléchette(s) détectée(s).")
+	for i, camera_id in enumerate(camera_ids):
+		mask = liste_masques[i]
+		count = compter_flechettes_dans_masque(mask, seuil=SEUIL_AIRE_REDIMENSIONNE)
 
-    camera_choisie = choisir_camera_detection(detections)
-    etat_camera = states[camera_choisie.camera_id]
-    masque_nouveau = isoler_nouvelle_fleche(camera_choisie.mask, etat_camera.previous_mask)
+		detections.append(CameraDetection(camera_id=camera_id, mask=mask, dart_count=count))
+		print(f"[INFO] Caméra {camera_id} : {count} fléchette(s) détectée(s).")
 
-    point_camera = extraire_point_cible(masque_nouveau, seuil=SEUIL_AIRE_REDIMENSIONNE)
+	camera_choisie = choisir_camera_detection(detections)
+	etat_camera = states[camera_choisie.camera_id]
+	masque_nouveau = isoler_nouvelle_fleche(camera_choisie.mask, etat_camera.previous_mask)
 
-    if point_camera is None:
-        print(f"[ERREUR] Aucune caméra n'a détectée une fléchette valide.")
-    else:
+	point_camera = extraire_point_cible(masque_nouveau, seuil=SEUIL_AIRE_REDIMENSIONNE)
+
+	if point_camera is None:
+		print(f"[ERREUR] Aucune caméra n'a détectée une fléchette valide.")
+	else:
         # --- REMISE À L'ÉCHELLE 1280x720 ---
-        point_original = (point_camera[0] * SCALE_FACTOR, point_camera[1] * SCALE_FACTOR)
+		point_original = (point_camera[0] * SCALE_FACTOR, point_camera[1] * SCALE_FACTOR)
 
-        point_corrige = appliquer_homographie(point_original, homographies[camera_choisie.camera_id])
-        print(f"[INFO] Point détecté (échelle réduite) : {point_camera}")
-        print(f"[INFO] Point recalculé (échelle 100%) : {point_original}")
-        print(f"[INFO] Point corrigé par homographie : ({point_corrige[0]:.2f}, {point_corrige[1]:.2f})")
+		point_corrige = appliquer_homographie(point_original, homographies[camera_choisie.camera_id])
+		print(f"[INFO] Point détecté (échelle réduite) : {point_camera}")
+		print(f"[INFO] Point recalculé (échelle 100%) : {point_original}")
+		print(f"[INFO] Point corrigé par homographie : ({point_corrige[0]:.2f}, {point_corrige[1]:.2f})")
 
-        print(f"[INFO] Envoi en cours de la position corrigée au serveur backend")
-        envoyer_point_au_backend(point_corrige[0], point_corrige[1], camera_choisie.camera_id)
+		print(f"[INFO] Envoi en cours de la position corrigée au serveur backend")
+		envoyer_point_au_backend(point_corrige[0], point_corrige[1], camera_choisie.camera_id)
 
     # Mise à jour de l'état (les masques sauvegardés sont en 640x360, ce qui économise aussi de la RAM !)
-    for detection in detections:
-        states[detection.camera_id].previous_mask = detection.mask.copy()
-        states[detection.camera_id].previous_count = detection.dart_count
-
+	for detection in detections:
+		states[detection.camera_id].previous_mask = detection.mask.copy()
+		states[detection.camera_id].previous_count = detection.dart_count
+	
+	print(f"[INFO] Analyse du lancer terminée en {(monotonic() - t_logic_start):.3f} secondes")
+	print(f"[INFO] Temps total analyse du lancer : {(monotonic() - t_debut_analyse):.3f} secondes\n")
 
 def ouvrir_une_camera(camera_id):
     """Tente d'ouvrir une seule caméra (Multithreadé)."""
@@ -393,7 +406,7 @@ def ouvrir_une_camera(camera_id):
 def ouvrir_cameras() -> dict[int, cv2.VideoCapture]:
 	"""Ouvre les 3 caméras en parallèle"""
 	cameras_ouvertes = {}
-	camera_index = [3, 0, 2] # Les index des 3 caméras
+	camera_index = [3, 2, 1] # Les index des 3 caméras
 	
 	with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
 		# Lance les 3 ouvertures exactement au même moment
@@ -403,7 +416,7 @@ def ouvrir_cameras() -> dict[int, cv2.VideoCapture]:
 			# cam 1 -> indice 3
 			# cam 2 -> indice 2
 			# cam 3 -> indice 1
-			mapping = {3: 1, 0: 2, 2: 3} # Mapping des indices physiques vers les numéros des caméras tels que mis sur leur support
+			mapping = {3: 1, 2: 2, 1: 3} # Mapping des indices physiques vers les numéros des caméras tels que mis sur leur support
 			num_camera = mapping.get(camera_index)
 			if cap is not None:
 				cameras_ouvertes[num_camera] = cap
@@ -518,12 +531,14 @@ def attendre_reprise_apres_pause(
 
 def main() -> None:
 	"""Boucle principale du système d'auto-scoring."""
-
+	print("Chargement du modèle...")
 	learner = charger_modele()
+	print("Chargement de l'homographie...")
 	homographies = charger_homographies(HOMOGRAPHY_FILE)
+	print("Chargement des caméras...")
 	cameras = ouvrir_cameras()
 
-	
+	print("Lecture des images de référence...")
 	frames_reference = lire_images_reference(cameras)
 	previous_gray = {
 		camera_id: preparer_image_pour_difference(frame)
@@ -563,18 +578,20 @@ def main() -> None:
 			print("Fléchette détectée ! Capture prévue dans 1/2 seconde.")
 
 		if capture_en_attente and (maintenant - instant_detection) >= CAPTURE_DELAY_SECONDS:
+			t_cap_start = monotonic() # CHRONO DEBUT CAPTURE
+
 			frames_capturees = capturer_images_courantes(cameras)
-			
+		
 			"""
 			Bien pour DEBUG
 			mais l'écriture sur disque prends 0.5 à 1 seconde"""
 			# Sauvegarde des images capturées pour DEBUG par lance par caméra
-			# for camera_id, frame in frames_capturees.items():
-			# 	chemin_image = IMAGE_DIR / f"cam{camera_id}_lancer{nbLancer}.jpg"
-			# 	if not cv2.imwrite(str(chemin_image), frame):
-			# 		print(f"[ERREUR] Échec de l'enregistrement de {chemin_image}.")
+			for camera_id, frame in frames_capturees.items():
+				chemin_image = IMAGE_DIR / f"cam{camera_id}_lancer{nbLancer}.jpg"
+				if not cv2.imwrite(str(chemin_image), frame):
+					print(f"[ERREUR] Échec de l'enregistrement de {chemin_image}.")
 			nbLancer += 1
-
+			print(f"[CHRONO] Capture des 3 images : {(monotonic() - t_cap_start):.3f} secondes")
 			# Analyse du lancer à partir des 3 images capturées
 			# Images trop grandes 1280x720, à redimensionner plus tard pour accélérer l'inférence
 			print("--- En cours d'analyse (4 secondes) ---")
