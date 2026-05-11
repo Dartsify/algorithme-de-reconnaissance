@@ -191,19 +191,25 @@ def compter_flechettes_dans_masque(mask: np.ndarray, seuil: float = MIN_DART_CON
 	return sum(1 for c in contours if cv2.contourArea(c) >= seuil)
 
 
-def choisir_camera_detection(detections: list[CameraDetection]) -> CameraDetection:
-	"""Choisit la caméra à traiter selon le nombre de fléchettes détectées.
+# def choisir_camera_detection(detections: list[CameraDetection]) -> CameraDetection:
+# 	"""Choisit la caméra à traiter selon le nombre de fléchettes détectées.
 
-	La caméra avec le score le plus élevé est privilégiée. En cas d'égalité,
-	on sélectionne aléatoirement parmi les caméras ex aequo.
-	"""
+# 	La caméra avec le score le plus élevé est privilégiée. En cas d'égalité,
+# 	on sélectionne aléatoirement parmi les caméras ex aequo.
+# 	"""
 
-	if not detections:
-		raise ValueError("Aucune détection fournie.")
+# 	if not detections:
+# 		raise ValueError("Aucune détection fournie.")
 
-	meilleur_score = max(detection.dart_count for detection in detections)
-	choix = [detection for detection in detections if detection.dart_count == meilleur_score]
-	return random.choice(choix)
+# 	meilleur_score = max(detection.dart_count for detection in detections)
+# 	choix = [detection for detection in detections if detection.dart_count == meilleur_score]
+# 	return random.choice(choix)
+
+
+
+
+
+
 
 
 def isoler_nouvelle_fleche(mask_actuel: np.ndarray, masque_precedent: np.ndarray | None) -> np.ndarray:
@@ -359,26 +365,81 @@ def analyser_lancer(
 		detections.append(CameraDetection(camera_id=camera_id, mask=mask, dart_count=count))
 		print(f"[INFO] Caméra {camera_id} : {count} fléchette(s) détectée(s).")
 
-	camera_choisie = choisir_camera_detection(detections)
-	etat_camera = states[camera_choisie.camera_id]
-	masque_nouveau = isoler_nouvelle_fleche(camera_choisie.mask, etat_camera.previous_mask)
+	# camera_choisie = choisir_camera_detection(detections)
+	# etat_camera = states[camera_choisie.camera_id]
+	# masque_nouveau = isoler_nouvelle_fleche(camera_choisie.mask, etat_camera.previous_mask)
 
-	point_camera = extraire_point_cible(masque_nouveau, seuil=SEUIL_AIRE_REDIMENSIONNE)
+	# point_camera = extraire_point_cible(masque_nouveau, seuil=SEUIL_AIRE_REDIMENSIONNE)
 
-	if point_camera is None:
-		print(f"[ERREUR] Aucune caméra n'a détectée une fléchette valide.")
+	# if point_camera is None:
+	# 	print(f"[ERREUR] Aucune caméra n'a détectée une fléchette valide.")
+	# else:
+    #     # --- REMISE À L'ÉCHELLE 1280x720 ---
+	# 	point_original = (point_camera[0] * SCALE_FACTOR, point_camera[1] * SCALE_FACTOR)
+
+	# 	point_corrige = appliquer_homographie(point_original, homographies[camera_choisie.camera_id])
+	# 	print(f"[INFO] Point détecté (échelle réduite) : {point_camera}")
+	# 	print(f"[INFO] Point recalculé (échelle 100%) : {point_original}")
+	# 	print(f"[INFO] Point corrigé par homographie : ({point_corrige[0]:.2f}, {point_corrige[1]:.2f})")
+
+	# 	print(f"[INFO] Envoi en cours de la position corrigée au serveur backend")
+	# 	envoyer_point_au_backend(point_corrige[0], point_corrige[1], camera_choisie.camera_id)
+
+	#MODIF ADRI 
+	# --- NOUVELLE LOGIQUE : CHOIX PAR LA PLUS GRANDE SURFACE ---
+    # 1. On trouve le nombre maximum de fléchettes vues (le "meilleur score") 
+	meilleur_score = max(d.dart_count for d in detections) if detections else 0
+	candidats = [d for d in detections if d.dart_count == meilleur_score]	
+
+	meilleure_camera_id = None
+	plus_grande_aire = -1
+	point_camera = None
+
+	# 2. La compétition : on mesure la taille de la fléchette sur chaque candidat
+	for candidat in candidats:
+		etat = states[candidat.camera_id]
+		masque_nouveau = isoler_nouvelle_fleche(candidat.mask, etat.previous_mask)
+	
+		# On cherche les contours (les taches blanches)
+		contours, _ = cv2.findContours(masque_nouveau, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+		contours_valides = [c for c in contours if cv2.contourArea(c) >= SEUIL_AIRE_REDIMENSIONNE]
+        
+		if contours_valides:
+			contour_principal = max(contours_valides, key=cv2.contourArea)
+			aire = cv2.contourArea(contour_principal)
+            
+			# Si cette tache est plus grosse que la précédente, cette caméra devient la meilleure !
+			if aire > plus_grande_aire:
+				plus_grande_aire = aire
+				meilleure_camera_id = candidat.camera_id
+                
+				# On calcule ses coordonnées X, Y tout de suite
+				moments = cv2.moments(contour_principal)
+				if moments["m00"] != 0:
+					point_camera = (int(moments["m10"] / moments["m00"]), int(moments["m01"] / moments["m00"]))
+				else:
+					x, y, w, h = cv2.boundingRect(contour_principal)
+					point_camera = (x + w // 2, y + h // 2)
+
+	if point_camera is None or meilleure_camera_id is None:
+		print(f"[ERREUR] Aucune caméra n'a détecté une fléchette valide.")
 	else:
-        # --- REMISE À L'ÉCHELLE 1280x720 ---
+		print(f"[INFO] *** Caméra élue : {meilleure_camera_id} (Taille de la tache : {plus_grande_aire:.1f} pixels) ***")
+        
+		# --- REMISE À L'ÉCHELLE 1280x720 ---
 		point_original = (point_camera[0] * SCALE_FACTOR, point_camera[1] * SCALE_FACTOR)
 
-		point_corrige = appliquer_homographie(point_original, homographies[camera_choisie.camera_id])
+		point_corrige = appliquer_homographie(point_original, homographies[meilleure_camera_id])
 		print(f"[INFO] Point détecté (échelle réduite) : {point_camera}")
 		print(f"[INFO] Point recalculé (échelle 100%) : {point_original}")
 		print(f"[INFO] Point corrigé par homographie : ({point_corrige[0]:.2f}, {point_corrige[1]:.2f})")
 
 		print(f"[INFO] Envoi en cours de la position corrigée au serveur backend")
-		envoyer_point_au_backend(point_corrige[0], point_corrige[1], camera_choisie.camera_id)
+		envoyer_point_au_backend(point_corrige[0], point_corrige[1], meilleure_camera_id)
 
+ 
+ 
+ 
     # Mise à jour de l'état (les masques sauvegardés sont en 640x360, ce qui économise aussi de la RAM !)
 	for detection in detections:
 		states[detection.camera_id].previous_mask = detection.mask.copy()
