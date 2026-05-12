@@ -8,19 +8,21 @@ import pathlib
 import random
 import re
 from dataclasses import dataclass
-from datetime import datetime
 from pathlib import Path
-from time import monotonic
+from time import monotonic, sleep
 import keyboard
 import concurrent.futures # pour le traitement en parallèle des caméras
+import threading
 
 import cv2
 import numpy as np
 import requests
-import torch
-from fastai.vision.all import PILImage, load_learner, Pipeline
-from fastai.callback.wandb import WandbCallback
-from fastai.callback.tracker import SaveModelCallback, EarlyStoppingCallback
+import onnxruntime as ort
+"""Supprimer ces 4 lignes d'import nous fait gagner 20 secondes au démarrage"""
+# import torch
+# from fastai.vision.all import PILImage, load_learner, Pipeline
+# from fastai.callback.wandb import WandbCallback
+# from fastai.callback.tracker import SaveModelCallback, EarlyStoppingCallback
 
 # -----------------------------------------------------------------------------
 # Configuration générale
@@ -29,26 +31,31 @@ from fastai.callback.tracker import SaveModelCallback, EarlyStoppingCallback
 PROJECT_ROOT = Path(__file__).resolve().parent
 IMAGE_DIR = PROJECT_ROOT / "saved_images"
 HOMOGRAPHY_FILE = PROJECT_ROOT / "matrice_homographie"
-MODEL_PATH = PROJECT_ROOT / "dartsify_ai_final_radius15.pkl"
+MODEL_PATH = PROJECT_ROOT / "models_onnx" / "model_a_tester" / "final_resnet34_r15_1500.onnx"
 
 IMAGE_DIR.mkdir(parents=True, exist_ok=True)
-
 # Paramètres de détection du mouvement
-MOTION_PIXEL_THRESHOLD = 25
-MOTION_AREA_THRESHOLD = 4000
-CAPTURE_DELAY_SECONDS = 1.0
-CAPTURE_COOLDOWN_SECONDS = 1.0
+MOTION_PIXEL_THRESHOLD = 25 # Seuil de changement de pixel pour détecter le mouvement
+# MOTION_PIXEL_THRESHOLD = 25
+# MOTION_AREA_THRESHOLD = 4000
+MOTION_AREA_THRESHOLD = 6000 # Seuil de surface de mouvement pour déclencher la capture (ajusté pour éviter les faux positifs liés au bruit)
+CAPTURE_DELAY_SECONDS = 0.6 # Temps entre la détection du mouvement et la capture des images (pour laisser le temps à la fléchette de se stabiliser)
+CAPTURE_COOLDOWN_SECONDS = 1.0 # Temps minimum entre deux captures pour éviter les faux positifs successifs
+LANCERS_PAR_SERIE = 3 # Nombre de lancers avant de demander une pause pour retirer les fléchettes
+PAUSE_REFERENCE_PIXEL_THRESHOLD = 10 # Seuil de changement de pixel pour considérer que la cible a été modifiée (pour la pause)
+PAUSE_REFERENCE_CHANGED_RATIO = 0.01 # Seuil de ratio de pixels modifiés pour détecter que la cible a été modifiée (pour la pause)
 
 # Paramètres de post-traitement des masques
 MASK_CLASS_INDEX = 1 # Classe Point
 # rayon 15 : 600
+# rayon 12 : 400
 # rayon 10 : 300
 # rayon 5 : 70
-MIN_DART_CONTOUR_AREA = 600 # Seuil d'aire pour filtrer les contours de fléchettes valides avec les fausses détections
+MIN_DART_CONTOUR_AREA = 200 # Seuil d'aire pour filtrer les contours de fléchettes valides avec les fausses détections
 MASK_MORPH_KERNEL_SIZE = 3 # Nettoyage des masques
 
 # Paramètres backend
-API_URL = os.getenv("DARTS_API_URL", "http://127.0.0.1:8100/throws/")
+API_URL = os.getenv("DARTS_API_URL", "http://127.0.0.1:8000/throws/")
 API_KEY = os.getenv("DARTS_API_KEY", "super_secret_key_for_raspberry_api_12345")
 TARGET_ID = os.getenv("DARTS_TARGET_ID", "000001")
 
@@ -84,25 +91,25 @@ def charger_matrice_par_defaut() -> dict[int, np.ndarray]:
 	return {
 		1: np.array(
 			[
-				[-1.71909584e00, 2.58377826e00, 1.72569816e03],
-				[7.63326491e-02, -1.72803527e00, 1.10946414e03],
-				[1.64742308e-04, 4.29686646e-03, 1.00000000e00],
+				[-1.54744747e+00 , 2.01207706e+00 , 1.64549097e+03],
+				[ 5.02029243e-02, -1.54389660e+00 , 1.06215039e+03],
+				[ 8.98015152e-05,  3.29451391e-03 , 1.00000000e+00],
 			],
 			dtype=np.float32,
 		),
 		2: np.array(
 			[
-				[1.06418902e00, 5.22050293e00, -8.90854791e02],
-				[-1.57792881e00, 2.80472826e00, 9.64442615e02],
-				[1.71439037e-04, 3.84979197e-03, 1.00000000e00],
+				[ 8.49576668e-01,  5.26024936e+00, -7.82547253e+02],
+				[-1.62765176e+00,  2.87406548e+00,  1.03137300e+03],
+				[-2.52820909e-05,  3.92177741e-03,  1.00000000e+00],
 			],
 			dtype=np.float32,
 		),
 		3: np.array(
 			[
-				[6.03144827e-01, -1.42398095e-01, 6.41179807e02],
-				[1.11326188e00, 2.21438999e00, -8.19137245e02],
-				[-1.88153205e-04, 3.04541146e-03, 1.00000000e00],
+				[ 9.60326743e-01, -2.21611615e-01,  7.06639618e+02],
+				[ 1.54939256e+00,  2.89764562e+00, -1.13548245e+03],
+				[ 1.05334137e-04,  3.61472608e-03,  1.00000000e+00],
 			],
 			dtype=np.float32,
 		),
@@ -162,95 +169,47 @@ def calculer_score_mouvement(image_precedente: np.ndarray, image_actuelle: np.nd
 		255,
 		cv2.THRESH_BINARY,
 	)
-	# Use an explicit structuring element to satisfy type checkers (None is accepted by OpenCV at runtime
-	# but static type checkers may flag it). A 3x3 rectangular kernel is typical for dilation here.
-	kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
+	kernel = np.ones((MASK_MORPH_KERNEL_SIZE, MASK_MORPH_KERNEL_SIZE), dtype=np.uint8)
 	difference_binaire = cv2.dilate(difference_binaire, kernel, iterations=2)
 	contours, _ = cv2.findContours(difference_binaire, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 	return float(sum(cv2.contourArea(contour) for contour in contours))
 
-
 def charger_modele():
-	"""Charge le modèle de segmentation entraîné."""
-	if not MODEL_PATH.exists():
-		raise FileNotFoundError(f"Modèle introuvable : {MODEL_PATH}")
+    """Chargement du modèle ONNX ultra-rapide en mémoire."""
+    if not MODEL_PATH.exists():
+        raise FileNotFoundError(f"Modèle introuvable : {MODEL_PATH}")
+    
+    # On force l'utilisation du CPU optimisé
+    session = ort.InferenceSession(str(MODEL_PATH), providers=['CPUExecutionProvider'])
+    return session
 
-	def get_x(row):
-		return row['image_path']
-
-	def get_mask(row):
-		return row['mask_path']
-	
-	learn = load_learner(MODEL_PATH)
-
-	# NETTOYAGE CRITIQUE : On supprime les callbacks d'entraînement pour l'inférence
-	if WandbCallback in [type(cb) for cb in learn.cbs]:
-		learn.remove_cb(WandbCallback)
-
-	if SaveModelCallback in [type(cb) for cb in learn.cbs]:
-		learn.remove_cb(SaveModelCallback)
-
-	if EarlyStoppingCallback in [type(cb) for cb in learn.cbs]:
-		learn.remove_cb(EarlyStoppingCallback)
-
-	# ON DÉSACTIVE LE CENTERCROP FANTÔME DE FASTAI
-	# 1. On filtre la liste des transformations pour retirer les "Crop"
-	transformations_sans_crop = [tfm for tfm in learn.dls.after_item.fs if 'Crop' not in type(tfm).__name__]
-
-	# 2. On recrée le Pipeline avec les transformations restantes (ex: ToTensor)
-	learn.dls.after_item = Pipeline(transformations_sans_crop)
-
-	return learn
-
-
-def predire_masque_binaire(learner, frame_bgr: np.ndarray) -> np.ndarray:
-	"""Retourne un masque binaire pour la classe correspondant à la pointe."""
-
-	frame_rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
-	image = PILImage.create(frame_rgb)
-
-	after_item = learner.dls.after_item
-	after_batch = learner.dls.after_batch
-	x = after_item(image)
-	x = after_batch(x[None])
-
-	learner.model.eval()
-	with torch.no_grad():
-		prediction = learner.model(x.to(learner.dls.device)).argmax(dim=1)[0]
-
-	mask = (prediction.cpu().numpy() == MASK_CLASS_INDEX).astype(np.uint8) * 255
-	# mask = (prediction.numpy() == MASK_CLASS_INDEX).astype(np.uint8) * 255
-
-	# mask = cv2.convertScaleAbs(mask)
-	# Nettoyage léger pour supprimer les petits pixels parasites.
-	kernel = np.ones((MASK_MORPH_KERNEL_SIZE, MASK_MORPH_KERNEL_SIZE), np.uint8)
-	mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel, iterations=1)
-	mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel, iterations=1)
-	return mask
-
-
-def compter_flechettes_dans_masque(mask: np.ndarray) -> int:
+def compter_flechettes_dans_masque(mask: np.ndarray, seuil: float = MIN_DART_CONTOUR_AREA):
 	"""Compte les contours valides du masque, assimilés aux fléchettes détectées."""
 
 	# cv2.RETR_TREE : tous les contours, y compris les trous internes
 	contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE) #uniquement les contours externes
-	contours_valides = [contour for contour in contours if cv2.contourArea(contour) >= MIN_DART_CONTOUR_AREA]
-	return len(contours_valides)
+	return sum(1 for c in contours if cv2.contourArea(c) >= seuil)
 
 
-def choisir_camera_detection(detections: list[CameraDetection]) -> CameraDetection:
-	"""Choisit la caméra à traiter selon le nombre de fléchettes détectées.
+# def choisir_camera_detection(detections: list[CameraDetection]) -> CameraDetection:
+# 	"""Choisit la caméra à traiter selon le nombre de fléchettes détectées.
 
-	La caméra avec le score le plus élevé est privilégiée. En cas d'égalité,
-	on sélectionne aléatoirement parmi les caméras ex aequo.
-	"""
+# 	La caméra avec le score le plus élevé est privilégiée. En cas d'égalité,
+# 	on sélectionne aléatoirement parmi les caméras ex aequo.
+# 	"""
 
-	if not detections:
-		raise ValueError("Aucune détection fournie.")
+# 	if not detections:
+# 		raise ValueError("Aucune détection fournie.")
 
-	meilleur_score = max(detection.dart_count for detection in detections)
-	choix = [detection for detection in detections if detection.dart_count == meilleur_score]
-	return random.choice(choix)
+# 	meilleur_score = max(detection.dart_count for detection in detections)
+# 	choix = [detection for detection in detections if detection.dart_count == meilleur_score]
+# 	return random.choice(choix)
+
+
+
+
+
+
 
 
 def isoler_nouvelle_fleche(mask_actuel: np.ndarray, masque_precedent: np.ndarray | None) -> np.ndarray:
@@ -268,12 +227,12 @@ def isoler_nouvelle_fleche(mask_actuel: np.ndarray, masque_precedent: np.ndarray
 	return masque_difference
 
 
-def extraire_point_cible(mask: np.ndarray) -> tuple[int, int] | None:
+def extraire_point_cible(mask: np.ndarray, seuil: float = MIN_DART_CONTOUR_AREA) -> tuple[int, int] | None:
 	"""Récupère la position (x, y) du centre du plus grand contour du masque."""
 
 	# cv2.RETR_TREE tous les contours, y compris les trous internes
 	contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE) #uniquement les contours externes
-	contours = [contour for contour in contours if cv2.contourArea(contour) >= MIN_DART_CONTOUR_AREA]
+	contours = [contour for contour in contours if cv2.contourArea(contour) >= seuil]
 	if not contours:
 		return None
 
@@ -281,11 +240,11 @@ def extraire_point_cible(mask: np.ndarray) -> tuple[int, int] | None:
 	moments = cv2.moments(contour_principal)
 	if moments["m00"] == 0:
 		x, y, largeur, hauteur = cv2.boundingRect(contour_principal)
-		return x + largeur // 2, y + hauteur // 2
-
-	cx = int(moments["m10"] / moments["m00"])
-	cy = int(moments["m01"] / moments["m00"])
-	return cx, cy
+		cx, cy = x + largeur // 2, y + hauteur // 2
+	else:
+		cx = int(moments["m10"] / moments["m00"])
+		cy = int(moments["m01"] / moments["m00"])
+	return (cx, cy)
 
 
 def appliquer_homographie(point: tuple[int, int], matrice_homographie: np.ndarray) -> tuple[float, float]:
@@ -306,193 +265,434 @@ def envoyer_point_au_backend(x_impact: float, y_impact: float, camera_id: int) -
 		"camera_id": camera_id,
 	}
 
-	try:
-		response = requests.post(API_URL, json=payload, headers=HEADERS, timeout=15)
-		if response.status_code == 200:
-			data = response.json()
-			print(f"[INFO] Fléchette enregistrée par le serveur (multiplicateur x{data.get('multiplier', '?')}).")
-		else:
-			print(f"[ERREUR] Erreur API : {response.status_code} - {response.text}")
-	except requests.exceptions.RequestException as exc:
-		print(f"[ERREUR] Erreur de connexion au serveur : {exc}")
 
+	def sendCoord():
+		t_req_start	= monotonic() # CHRONO RESEAU
+		try:
+			response = requests.post(API_URL, json=payload, headers=HEADERS, timeout=15)
+			t_req_end = monotonic()
+
+			if response.status_code == 200:
+				data = response.json()
+				print(f"[INFO] Fléchette enregistrée par le serveur (multiplicateur x{data.get('multiplier', '?')}).")
+				print(f"[CHRONO] Envoi API réussi en : {(t_req_end - t_req_start):.3f} secondes")
+			else:
+				print(f"[ERREUR] Erreur API : {response.status_code} - {response.text}")
+		except requests.exceptions.RequestException as exc:
+			print(f"[ERREUR] Erreur de connexion au serveur : {exc}")
+
+	# On lance l'envoi en arrière-plan !
+	threading.Thread(target=sendCoord, daemon=True).start()
 
 def analyser_lancer(
-	learner,
-	homographies: dict[int, np.ndarray],
-	frames: dict[int, np.ndarray],
-	states: dict[int, CameraState],
+    ort_session, # On passe la session ONNX ici (anciennement learner)
+    homographies: dict[int, np.ndarray],
+    frames: dict[int, np.ndarray],
+    states: dict[int, CameraState],
+    nbLancer: int
 ) -> None:
-	"""Analyse un lancer complet à partir des 3 images capturées simultanément."""
-	# L'objectif plus tard sera de capturer les images en parallèle, mais pour l'instant on les traite séquentiellement.
+	"""Analyse un lancer complet en envoyant les 3 images redimensionnées en MÊME TEMPS à l'IA."""
+	t_debut_analyse = monotonic() # CHRONO DEBUT ANALYSE
 
-	detections: list[CameraDetection] = []
-	for camera_id, frame in frames.items():
-		mask = predire_masque_binaire(learner, frame)
-		count = compter_flechettes_dans_masque(mask)
+	SCALE_FACTOR = 2
+	NEW_WIDTH = 1280 // SCALE_FACTOR
+	NEW_HEIGHT = 720 // SCALE_FACTOR
+
+	def predire_masques_en_lot(ort_session, liste_frames_bgr: list[np.ndarray]):
+		"""Inférence ultra-rapide d'un lot d'images via ONNX Runtime."""
+		input_batch = []
+        
+        # Moyenne et Écart-type standards de FastAI (ImageNet)
+		mean = np.array([0.485, 0.456, 0.406], dtype=np.float32)
+		std = np.array([0.229, 0.224, 0.225], dtype=np.float32)
+
+		t_prep_start = monotonic() # CHRONO DEBUT PREP
+		for img in liste_frames_bgr:
+            # Redimensionnement
+			img_resized = cv2.resize(img, (NEW_WIDTH, NEW_HEIGHT), interpolation=cv2.INTER_AREA)
+            
+            # Conversion BGR (OpenCV) vers RGB (Modèle IA)
+			img_rgb = cv2.cvtColor(img_resized, cv2.COLOR_BGR2RGB)
+            
+            # Normalisation manuelle
+			img_normalized = img_rgb.astype(np.float32) / 255.0
+			img_normalized = (img_normalized - mean) / std
+            
+            # Transposition: OpenCV donne (H, W, Canaux), ONNX attend (Canaux, H, W)
+			img_transposed = np.transpose(img_normalized, (2, 0, 1))
+			input_batch.append(img_transposed)
+
+        # Empiler les 3 images pour faire un "Batch"
+		input_tensor = np.array(input_batch, dtype=np.float32)
+		print(f"[INFO] Préparation des images pour modèle : {(monotonic() - t_prep_start):.3f} secondes")
+
+		t_onnx_start = monotonic() # CHRONO DEBUT ONNX
+		input_name = ort_session.get_inputs()[0].name
+		ort_outs = ort_session.run(None, {input_name: input_tensor})
+        
+        # ort_outs[0] a la forme (3, 2, H, W)
+		preds = ort_outs[0]
+
+        # Argmax sur la dimension des classes
+		masques_batch = np.argmax(preds, axis=1) # Résultat : (3, H, W) avec des 0 et des 1
+		print(f"[INFO] Inférence IA Runtime : {(monotonic() - t_onnx_start):.3f} secondes")
+
+		t_morph_start = monotonic() # CHRONO POST-TRAITEMENT
+		liste_masques_finaux = []
+		kernel_size = max(1, MASK_MORPH_KERNEL_SIZE // SCALE_FACTOR)
+		kernel = np.ones((kernel_size, kernel_size), np.uint8)
+		for i in range(len(liste_frames_bgr)):
+			masque_numpy = (masques_batch[i] == MASK_CLASS_INDEX).astype(np.uint8) * 255
+			# masque_numpy = cv2.morphologyEx(masque_numpy, cv2.MORPH_OPEN, kernel, iterations=1)
+			masque_numpy = cv2.morphologyEx(masque_numpy, cv2.MORPH_CLOSE, kernel, iterations=1)  
+   
+
+   
+			liste_masques_finaux.append(masque_numpy)
+		print(f"[INFO] Post-traitement des masques : {(monotonic() - t_morph_start):.3f} secondes")
+		return liste_masques_finaux
+
+	camera_ids = list(frames.keys())
+	liste_images = [frames[cam_id] for cam_id in camera_ids]
+	liste_masques = predire_masques_en_lot(ort_session, liste_images)
+
+	t_logic_start = monotonic() # CHRONO LOGIQUE METIER
+	detections = []
+
+    # Adapter le seuil d'aire car l'image est 4x plus petite
+	SEUIL_AIRE_REDIMENSIONNE = MIN_DART_CONTOUR_AREA // (SCALE_FACTOR ** 2)
+
+	for i, camera_id in enumerate(camera_ids):
+		mask = liste_masques[i]
+		nom_fichier = IMAGE_DIR / f"debug_mask_cam{camera_id}_lancer{nbLancer}.png"  # POUR DEBUG : on sauvegarde les masques pour vérifier que l'IA fait bien son travail
+		# A ENLEVER PAR APRES CAR TROP LOURD POUR RIEN, MAIS UTILE POUR LE DEBUG
+		cv2.imwrite(str(nom_fichier), mask)
+  
+		count = compter_flechettes_dans_masque(mask, seuil=SEUIL_AIRE_REDIMENSIONNE)
+  
+		
+
 		detections.append(CameraDetection(camera_id=camera_id, mask=mask, dart_count=count))
 		print(f"[INFO] Caméra {camera_id} : {count} fléchette(s) détectée(s).")
 
-	camera_choisie = choisir_camera_detection(detections)
-	etat_camera = states[camera_choisie.camera_id]
-	masque_nouveau = isoler_nouvelle_fleche(camera_choisie.mask, etat_camera.previous_mask)
-	point_camera = extraire_point_cible(masque_nouveau)
+	# camera_choisie = choisir_camera_detection(detections)
+	# etat_camera = states[camera_choisie.camera_id]
+	# masque_nouveau = isoler_nouvelle_fleche(camera_choisie.mask, etat_camera.previous_mask)
 
-	if point_camera is None:
-		print(
-			f"[ERREUR] Impossible d'extraire la position de la nouvelle fléchette "
-			f"sur la caméra {camera_choisie.camera_id}."
-		)
+	# point_camera = extraire_point_cible(masque_nouveau, seuil=SEUIL_AIRE_REDIMENSIONNE)
+
+	# if point_camera is None:
+	# 	print(f"[ERREUR] Aucune caméra n'a détectée une fléchette valide.")
+	# else:
+    #     # --- REMISE À L'ÉCHELLE 1280x720 ---
+	# 	point_original = (point_camera[0] * SCALE_FACTOR, point_camera[1] * SCALE_FACTOR)
+
+	# 	point_corrige = appliquer_homographie(point_original, homographies[camera_choisie.camera_id])
+	# 	print(f"[INFO] Point détecté (échelle réduite) : {point_camera}")
+	# 	print(f"[INFO] Point recalculé (échelle 100%) : {point_original}")
+	# 	print(f"[INFO] Point corrigé par homographie : ({point_corrige[0]:.2f}, {point_corrige[1]:.2f})")
+
+	# 	print(f"[INFO] Envoi en cours de la position corrigée au serveur backend")
+	# 	envoyer_point_au_backend(point_corrige[0], point_corrige[1], camera_choisie.camera_id)
+
+	#MODIF ADRI 
+	# --- NOUVELLE LOGIQUE : CHOIX PAR LA PLUS GRANDE SURFACE ---
+    # 1. On trouve le nombre maximum de fléchettes vues (le "meilleur score") 
+	meilleur_score = max(d.dart_count for d in detections) if detections else 0
+	candidats = [d for d in detections if d.dart_count == meilleur_score]	
+
+	meilleure_camera_id = None
+	plus_grande_aire = -1
+	point_camera = None
+
+	# 2. La compétition : on mesure la taille de la fléchette sur chaque candidat
+	for candidat in candidats:
+		etat = states[candidat.camera_id]
+		masque_nouveau = isoler_nouvelle_fleche(candidat.mask, etat.previous_mask)
+	
+		# On cherche les contours (les taches blanches)
+		contours, _ = cv2.findContours(masque_nouveau, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+  
+		SEUIL_NOUVELLE_FLECHETTE = SEUIL_AIRE_REDIMENSIONNE // 3 # seuil plus bas pour ne pas rater les petites taches
+  
+		contours_valides = [c for c in contours if cv2.contourArea(c) >= SEUIL_NOUVELLE_FLECHETTE]
+        
+		if contours_valides:
+			contour_principal = max(contours_valides, key=cv2.contourArea)
+			aire = cv2.contourArea(contour_principal)
+            
+			# Si cette tache est plus grosse que la précédente, cette caméra devient la meilleure !
+			if aire > plus_grande_aire:
+				plus_grande_aire = aire
+				meilleure_camera_id = candidat.camera_id
+                
+				# On calcule ses coordonnées X, Y tout de suite
+				moments = cv2.moments(contour_principal)
+				if moments["m00"] != 0:
+					point_camera = (int(moments["m10"] / moments["m00"]), int(moments["m01"] / moments["m00"]))
+				else:
+					x, y, w, h = cv2.boundingRect(contour_principal)
+					point_camera = (x + w // 2, y + h // 2)
+
+	if point_camera is None or meilleure_camera_id is None:
+		print(f"[ERREUR] Aucune caméra n'a détecté une fléchette valide.")
 	else:
-		point_corrige = appliquer_homographie(point_camera, homographies[camera_choisie.camera_id])
-		print(f"[INFO] Point détecté par la caméra {camera_choisie.camera_id} : {point_camera}")
+		print(f"[INFO] *** Caméra élue : {meilleure_camera_id} (Taille de la tache : {plus_grande_aire:.1f} pixels) ***")
+        
+		# --- REMISE À L'ÉCHELLE 1280x720 ---
+		point_original = (point_camera[0] * SCALE_FACTOR, point_camera[1] * SCALE_FACTOR)
+
+		point_corrige = appliquer_homographie(point_original, homographies[meilleure_camera_id])
+		print(f"[INFO] Point détecté (échelle réduite) : {point_camera}")
+		print(f"[INFO] Point recalculé (échelle 100%) : {point_original}")
 		print(f"[INFO] Point corrigé par homographie : ({point_corrige[0]:.2f}, {point_corrige[1]:.2f})")
 
 		print(f"[INFO] Envoi en cours de la position corrigée au serveur backend")
-		envoyer_point_au_backend(point_corrige[0], point_corrige[1], camera_choisie.camera_id)
+		envoyer_point_au_backend(point_corrige[0], point_corrige[1], meilleure_camera_id)
 
-	# On met à jour l'état de toutes les caméras pour le lancer suivant.
+ 
+ 
+ 
+    # Mise à jour de l'état (les masques sauvegardés sont en 640x360, ce qui économise aussi de la RAM !)
 	for detection in detections:
 		states[detection.camera_id].previous_mask = detection.mask.copy()
 		states[detection.camera_id].previous_count = detection.dart_count
+	
+	print(f"[INFO] Analyse du lancer terminée en {(monotonic() - t_logic_start):.3f} secondes")
+	print(f"[INFO] Temps total analyse du lancer : {(monotonic() - t_debut_analyse):.3f} secondes\n")
 
 def ouvrir_une_camera(camera_id):
-	"""Tente d'ouvrir une seule caméra (Multithreadé)."""
-	cap = cv2.VideoCapture(camera_id, cv2.CAP_MSMF) # on force explicitement l'api MSMF
-	
-	if cap.isOpened():
-		# Force la résolution 720p
-		cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
-		cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
-		return camera_id, cap
-	else:
-		print(f"Échec de la caméra {camera_id}.")
-		return camera_id, None
+    """Tente d'ouvrir une seule caméra (Multithreadé)."""
+    cap = cv2.VideoCapture(camera_id, cv2.CAP_MSMF) # on force explicitement l'api MSMF
+
+    if cap.isOpened():
+        cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+        cap.set(cv2.CAP_PROP_AUTO_EXPOSURE, 0)
+        return camera_id, cap
+    else:
+        print(f"Échec de la caméra {camera_id}.")
+        return camera_id, None
 
 def ouvrir_cameras() -> dict[int, cv2.VideoCapture]:
-	"""Ouvre les 3 caméras en parallèle"""
-	cameras_ouvertes = {}
-	camera_index = [3, 0, 2] # Les index des 3 caméras
-	
-	with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
-		# Lance les 3 ouvertures exactement au même moment
-		resultats = executor.map(ouvrir_une_camera, camera_index)
-		
-		for camera_index, cap in resultats:
-			# cam 1 -> indice 3
-			# cam 2 -> indice 0
-			# cam 3 -> indice 2
-			mapping = {3: 1, 0: 2, 2: 3} # Mapping des indices physiques vers les numéros des caméras tels que mis sur leur support
-			num_camera = mapping.get(camera_index)
-			if cap is not None:
-				cameras_ouvertes[num_camera] = cap
-			else:
-				raise RuntimeError(f"[ERREUR] Impossible d'ouvrir la caméra {num_camera}.")
-			
-	return cameras_ouvertes
+    """Ouvre les 3 caméras en parallèle"""
+    cameras_ouvertes = {}
+    camera_index = [3, 0, 2] # Les index des 3 caméras
+    with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
+        resultats = executor.map(ouvrir_une_camera, camera_index)
+        for camera_index, cap in resultats:
+            mapping = {1: 2 , 2: 3, 3: 1} 
+            num_camera = mapping.get(camera_index)
+            if cap is not None:
+                cameras_ouvertes[num_camera] = cap
+                print(f"[MAPPING] Caméra matérielle (Windows) {camera_index} associée à l'ID logiciel {num_camera}")
+            else:
+                raise RuntimeError(f"[ERREUR] Impossible d'ouvrir la caméra {num_camera}.")
+    return cameras_ouvertes
 
 
-def lire_images_reference(cameras: dict[int, cv2.VideoCapture]) -> dict[int, np.ndarray]:
-	"""Lit une image de référence pour chaque caméra au démarrage."""
+def lire_images_reference(cameras):
+    """Lit une image de référence pour chaque caméra au démarrage."""
 
-	frames: dict[int, np.ndarray] = {}
-	for camera_id, camera in cameras.items():
-		success, frame = camera.read()
-		if not success:
-			raise RuntimeError(f"[ERREUR] Impossible d'initialiser l'image de référence de la caméra {camera_id}.")
-		frames[camera_id] = frame
-	return frames
+    frames = {}
+    for camera_id, camera in cameras.items():
+        success, frame = camera.read()
+        if not success:
+            raise RuntimeError(f"[ERREUR] Impossible d'initialiser l'image de référence de la caméra {camera_id}.")
+        frames[camera_id] = frame
+    return frames
 
 
-def capturer_images_courantes(cameras: dict[int, cv2.VideoCapture]) -> dict[int, np.ndarray]:
-	"""Lit une image sur chacune des 3 caméras."""
+# def capturer_images_courantes(cameras):
+# 	"""Lit une image sur chacune des 3 caméras."""
 
-	frames: dict[int, np.ndarray] = {}
-	for camera_id, camera in cameras.items():
-		success, frame = camera.read()
-		if not success:
-			raise RuntimeError(f"[ERREUR] Impossible de lire le flux vidéo de la caméra {camera_id}.")
-		frames[camera_id] = frame
-	return frames
+# 	frames = {}
+# 	for camera_id, camera in cameras.items():
+# 		success, frame = camera.read()
+# 		if not success:
+# 			raise RuntimeError(f"[ERREUR] Impossible de lire le flux vidéo de la caméra {camera_id}.")
+# 		frames[camera_id] = frame
+# 	return frames
+
+def capturer_images_courantes(cameras):
+    """Lit une image sur chacune des 3 caméras de manière synchronisée."""
+    frames = {}
+    
+    # ordonne aux 3 caméras de figer la frame (très rapide)
+    for camera in cameras.values():
+        camera.grab()
+        
+    # récupère et décode les frames figées (plus lent, mais elles sont synchros !)
+    for camera_id, camera in cameras.items():
+        success, frame = camera.retrieve()
+        if not success:
+            raise RuntimeError(f"[ERREUR] Impossible de lire le flux de la caméra {camera_id}.")
+        frames[camera_id] = frame
+        
+    return frames
+
+
+def images_identiques(frames_a, frames_b):
+	"""Vérifie que chaque caméra voit une image suffisamment proche de la référence."""
+
+	if frames_a.keys() != frames_b.keys():
+		return False
+
+	for camera_id in frames_a:
+		if frames_a[camera_id] is None or frames_b[camera_id] is None:
+			return False
+
+		reference_gray = preparer_image_pour_difference(frames_b[camera_id])
+		current_gray = preparer_image_pour_difference(frames_a[camera_id])
+
+		difference = cv2.absdiff(reference_gray, current_gray)
+		changed_pixels = np.count_nonzero(difference > PAUSE_REFERENCE_PIXEL_THRESHOLD)
+		changed_ratio = changed_pixels / difference.size
+		if changed_ratio > PAUSE_REFERENCE_CHANGED_RATIO:
+			return False
+
+	return True
+
+
+def attendre_reprise_apres_pause(
+	cameras,
+	camera_states,
+	frames_reference,
+):
+	"""Attend que la cible redevienne vide avant de reprendre la partie.
+
+	Pendant la pause, on remet aussi à zéro l'historique des caméras afin de
+	repartir sur une nouvelle base après retrait des fléchettes.
+	"""
+
+	print("[PAUSE] Retirez les fléchettes de la cible.")
+
+	stop = False
+	while True:
+		try:
+			frames_actuelles = capturer_images_courantes(cameras)
+			if images_identiques(frames_actuelles, frames_reference):
+				print("[INFO] La cible est vide. La partie reprend dans 2 secondes...")
+				sleep(2.0)
+				print("[INFO] Go ! c'est reparti !\n")
+				break
+		except RuntimeError as exc:
+			print(f"[WARN] Lecture caméra temporairement indisponible pendant la pause : {exc}")
+			sleep(0.5)
+			continue
+		sleep(0.1)
+
+		if keyboard.is_pressed('space'):
+			stop = True
+			print("Fin de la partie.")
+			break
+
+	for state in camera_states.values():
+		state.previous_mask = None
+		state.previous_count = 0
+
+	return frames_reference, stop
 
 
 def main() -> None:
 	"""Boucle principale du système d'auto-scoring."""
-
+	print("Chargement du modèle...")
 	learner = charger_modele()
+	print("Chargement de l'homographie...")
 	homographies = charger_homographies(HOMOGRAPHY_FILE)
+	print("Chargement des caméras...")
 	cameras = ouvrir_cameras()
 
-	try:
-		frames_reference = lire_images_reference(cameras)
-		previous_gray = {
+	print("Lecture des images de référence...")
+	frames_reference = lire_images_reference(cameras)
+	previous_gray = {
+		camera_id: preparer_image_pour_difference(frame)
+		for camera_id, frame in frames_reference.items()
+	}
+	camera_states = {camera_id: CameraState() for camera_id in cameras}
+
+	print("La partie peut commencer !")
+	derniere_capture = 0.0
+	capture_en_attente = False
+	instant_detection = 0.0
+	lancers_depuis_pause = 0
+	
+	nbLancer = 1 # compteur de lancer pour le nommage des images sauvegardées(à supprimer plus tard)
+
+	while True:
+		frames_actuelles = capturer_images_courantes(cameras)
+		current_gray = {
 			camera_id: preparer_image_pour_difference(frame)
-			for camera_id, frame in frames_reference.items()
+			for camera_id, frame in frames_actuelles.items()
 		}
-		camera_states = {camera_id: CameraState() for camera_id in cameras}
 
-		print("La partie peut commencer !")
-		derniere_capture = 0.0
-		capture_en_attente = False
-		instant_detection = 0.0
+		scores = {
+			camera_id: calculer_score_mouvement(previous_gray[camera_id], current_gray[camera_id])
+			for camera_id in cameras
+		}
+		score_mouvement = max(scores.values())
+
+		maintenant = monotonic()
+		if (
+			not capture_en_attente
+			and score_mouvement > MOTION_AREA_THRESHOLD
+			and (maintenant - derniere_capture) > CAPTURE_COOLDOWN_SECONDS
+		):
+			capture_en_attente = True
+			instant_detection = maintenant
+			print("Fléchette détectée ! Capture prévue dans 1/2 seconde.")
+
+		if capture_en_attente and (maintenant - instant_detection) >= CAPTURE_DELAY_SECONDS:
+			t_cap_start = monotonic() # CHRONO DEBUT CAPTURE
+
+			frames_capturees = capturer_images_courantes(cameras)
 		
-		nbLancer = 1 # compteur de lancer pour le nommage des images sauvegardées(à supprimer plus tard)
+			"""
+			Bien pour DEBUG
+			mais l'écriture sur disque prends 0.5 à 1 seconde"""
+			# Sauvegarde des images capturées pour DEBUG par lance par caméra
+			for camera_id, frame in frames_capturees.items():
+				chemin_image = IMAGE_DIR / f"cam{camera_id}_lancer{nbLancer}.jpg"
+				if not cv2.imwrite(str(chemin_image), frame):
+					print(f"[ERREUR] Échec de l'enregistrement de {chemin_image}.")
+			nbLancer += 1
+			print(f"[CHRONO] Capture des 3 images : {(monotonic() - t_cap_start):.3f} secondes")
+			# Analyse du lancer à partir des 3 images capturées
+			# Images trop grandes 1280x720, à redimensionner plus tard pour accélérer l'inférence
+			print("--- En cours d'analyse (4 secondes) ---")
+			analyser_lancer(learner, homographies, frames_capturees, camera_states, nbLancer)
+			lancers_depuis_pause += 1
 
-		while True:
-			frames_actuelles = capturer_images_courantes(cameras)
-			current_gray = {
-				camera_id: preparer_image_pour_difference(frame)
-				for camera_id, frame in frames_actuelles.items()
-			}
+			capture_en_attente = False
+			derniere_capture = maintenant
 
-			scores = {
-				camera_id: calculer_score_mouvement(previous_gray[camera_id], current_gray[camera_id])
-				for camera_id in cameras
-			}
-			score_mouvement = max(scores.values())
+			print(f"\n--- En attente du lancer {nbLancer} ---")
 
-			maintenant = monotonic()
-			if (
-				not capture_en_attente
-				and score_mouvement > MOTION_AREA_THRESHOLD
-				and (maintenant - derniere_capture) > CAPTURE_COOLDOWN_SECONDS
-			):
-				capture_en_attente = True
-				instant_detection = maintenant
-				print("Fléchette détectée, capture prévue dans 1 seconde.")
+			if lancers_depuis_pause >= LANCERS_PAR_SERIE:
+				frames_reference, stop = attendre_reprise_apres_pause(cameras, camera_states, frames_reference)
 
-			if capture_en_attente and (maintenant - instant_detection) >= CAPTURE_DELAY_SECONDS:
-				# timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
-				frames_capturees = capturer_images_courantes(cameras)
-
-				# Sauvegarde des images capturées pour DEBUG par lance par caméra
-				for camera_id, frame in frames_capturees.items():
-					chemin_image = IMAGE_DIR / f"cam{camera_id}_lancer{nbLancer}.jpg"
-					if not cv2.imwrite(str(chemin_image), frame):
-						print(f"[ERREUR] Échec de l'enregistrement de {chemin_image}.")
-				nbLancer += 1
-
-				# Analyse du lancer à partir des 3 images capturées
-				# Images trop grandes 1280x720, à redimensionner plus tard pour accélérer l'inférence
-				print("---Temps d'analyse : ~7 secondes par caméra---")
-				analyser_lancer(learner, homographies, frames_capturees, camera_states)
-
+				if stop:
+					break
+				
+				previous_gray = {
+					camera_id: preparer_image_pour_difference(frame)
+					for camera_id, frame in frames_reference.items()
+				}
 				capture_en_attente = False
-				derniere_capture = maintenant
+				derniere_capture = monotonic()
+				lancers_depuis_pause = 0
+				continue
 
-				# SI OK, ON PASSE AU LANCER SUIVANT)
-				print(f"\n--- En attente du lancer {nbLancer} ---")
+		# Mise à jour des images de référence pour la prochaine différence de frame.
+		previous_gray = current_gray
 
-			# Mise à jour des images de référence pour la prochaine différence de frame.
-			previous_gray = current_gray
-
-			if keyboard.is_pressed('space') or keyboard.is_pressed('esc'):
-				print("Fin de la partie.")
-				break
-	finally:
-		for camera in cameras.values():
-			camera.release()
-		cv2.destroyAllWindows()
+		if keyboard.is_pressed('esc'):
+			print("Fin de la partie.")
+			break
+	
+	for camera in cameras.values():
+		camera.release()
+	cv2.destroyAllWindows()
 
 
 if __name__ == "__main__":

@@ -32,7 +32,7 @@ def ouvrir_une_camera(camera_id):
 		return camera_id, None
 
 
-camera_index = [3, 2, 1] # Les index des 3 caméras
+camera_index = [3, 0, 2] # Les index des 3 caméras
 with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
 	# Lance les 3 ouvertures exactement au même moment
 	resultats = list(executor.map(ouvrir_une_camera, camera_index))
