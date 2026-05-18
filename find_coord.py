@@ -3,9 +3,11 @@ import matplotlib.pyplot as plt
 
 import cv2
 
-IMAGE_DIR = Path('image_test/homographie_mur')
+IMAGE_DIR = Path('image_test/homographie_mur_fixe')
 
-img = cv2.imread(str(IMAGE_DIR / 'new' / 'cam3_homographie_avec_points.jpg'), cv2.IMREAD_COLOR)
+img = cv2.imread(str(IMAGE_DIR / 'cam3_homographie_avec_points.jpg'), cv2.IMREAD_COLOR)
+# img = cv2.imread(str(IMAGE_DIR / 'cam1_homographie_avec_points.jpg'))
+# plt.imshow(img)
 
 if img is None:
 	raise FileNotFoundError("Image not found")
@@ -33,7 +35,7 @@ for r in rayons:
 	cv2.putText(img, f'rayon {r[0]}px', (xText, yText), cv2.FONT_HERSHEY_SIMPLEX, 0.7, r[1], 2, cv2.LINE_AA)  # étiquette du rayon
 
 # write image with RGB color space (OpenCV uses BGR by default, so we need to convert it back to BGR before saving)
-cv2.imwrite(str(IMAGE_DIR / 'new' / 'cam3_with_circles.jpg'), cv2.cvtColor(img, cv2.COLOR_RGB2BGR))
+cv2.imwrite(str(IMAGE_DIR / 'cam3_with_circles.jpg'), cv2.cvtColor(img, cv2.COLOR_RGB2BGR))
 
 
 plt.imshow(img)

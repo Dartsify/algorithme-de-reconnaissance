@@ -13,7 +13,7 @@ import concurrent.futures # pour le traitement en parallèle des caméras
 
 message = ["Bien joué !!!!!!!", "Allez ! Encore quelques images et c'est bon", "Continue comme ça", "Excellent !!", "Oh le champion !", "Parfait", "Magnifique !", "Le modèle IA va en manger !", "Incroyable !!", "Fantastique !"]
 
-DATASET_DIR = Path('Dartsify/dataset/')
+DATASET_DIR = Path('Dartsify/dataset_300_fixe/')
 DATASET_DIR.mkdir(parents=True, exist_ok=True)
 HEIGHT, WIDTH = 720, 1280
 

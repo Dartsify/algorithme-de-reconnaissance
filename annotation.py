@@ -36,8 +36,8 @@ Voici un label d'exemple pour une image dans le fichier "label.csv":
 }
 """
 ROOT = Path(__file__).resolve().parent
-IMAGE_DIR = ROOT / "Dartsify" / "dataset1500"
-LABEL_PATH = ROOT / "Dartsify" / "label.csv"
+IMAGE_DIR = ROOT / "Dartsify" / "dataset_300_fixe"
+LABEL_PATH = ROOT / "Dartsify" / "label300_fixe.csv"
 
 
 def list_images(image_dir: Path):

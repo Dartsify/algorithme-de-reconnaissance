@@ -10,12 +10,14 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 from time import monotonic, sleep
-import keyboard
+#import keyboard
 import concurrent.futures # pour le traitement en parallèle des caméras
 import threading
 
 import cv2
 import numpy as np
+import signal
+import sys
 import requests
 import onnxruntime as ort
 """Supprimer ces 4 lignes d'import nous fait gagner 20 secondes au démarrage"""
@@ -29,11 +31,11 @@ import onnxruntime as ort
 # -----------------------------------------------------------------------------
 
 PROJECT_ROOT = Path(__file__).resolve().parent
-IMAGE_DIR = PROJECT_ROOT / "saved_images"
+# IMAGE_DIR = PROJECT_ROOT / "saved_images"
 HOMOGRAPHY_FILE = PROJECT_ROOT / "matrice_homographie"
 MODEL_PATH = PROJECT_ROOT / "models_onnx" / "model_a_tester" / "final_resnet34_r15_1500.onnx"
 
-IMAGE_DIR.mkdir(parents=True, exist_ok=True)
+# IMAGE_DIR.mkdir(parents=True, exist_ok=True)
 # Paramètres de détection du mouvement
 MOTION_PIXEL_THRESHOLD = 25 # Seuil de changement de pixel pour détecter le mouvement
 # MOTION_PIXEL_THRESHOLD = 25
@@ -51,13 +53,13 @@ MASK_CLASS_INDEX = 1 # Classe Point
 # rayon 12 : 400
 # rayon 10 : 300
 # rayon 5 : 70
-MIN_DART_CONTOUR_AREA = 200 # Adri: 200 --- Seuil d'aire pour filtrer les contours de fléchettes valides avec les fausses détections
+MIN_DART_CONTOUR_AREA = 300 # Adri: 200 --- Seuil d'aire pour filtrer les contours de fléchettes valides avec les fausses détections
 MASK_MORPH_KERNEL_SIZE = 3 # Nettoyage des masques
 
 # Paramètres backend
 API_URL = os.getenv("DARTS_API_URL", "http://100.121.0.116:8000/throws/")
 API_KEY = os.getenv("DARTS_API_KEY", "super_secret_key_for_raspberry_api_12345")
-TARGET_ID = os.getenv("DARTS_TARGET_ID", "000004")
+TARGET_ID = os.getenv("DARTS_TARGET_ID", "000001")
 
 HEADERS = {"X-API-Key": API_KEY}
 
@@ -185,9 +187,7 @@ def charger_modele():
     sess_options.execution_mode = ort.ExecutionMode.ORT_SEQUENTIAL
     
     # Active DirectML (Windows) si vous avez une carte graphique AMD/NVIDIA/Intel Iris
-    providers = ['CPUExecutionProvider']
-    if 'DmlExecutionProvider' in ort.get_available_providers():
-        providers.insert(0, 'DmlExecutionProvider')
+    providers = ['CPUExecutionProvider', 'XnnpackExecutionProvider']
         
     session = ort.InferenceSession(str(MODEL_PATH), sess_options=sess_options, providers=providers)
     return session
@@ -287,7 +287,7 @@ def analyser_lancer(
 	"""Analyse un lancer complet en envoyant les 3 images redimensionnées en MÊME TEMPS à l'IA."""
 	t_debut_analyse = monotonic() # CHRONO DEBUT ANALYSE
 
-	SCALE_FACTOR = 2
+	SCALE_FACTOR = 3
 	NEW_WIDTH = 1280 // SCALE_FACTOR
 	NEW_HEIGHT = 720 // SCALE_FACTOR
 
@@ -321,7 +321,7 @@ def analyser_lancer(
         
 		for i in range(len(liste_frames_bgr)):
 			masque_numpy = (masques_batch[i] == MASK_CLASS_INDEX).astype(np.uint8) * 255
-			masque_numpy = cv2.morphologyEx(masque_numpy, cv2.MORPH_OPEN, kernel, iterations=1)
+			# masque_numpy = cv2.morphologyEx(masque_numpy, cv2.MORPH_OPEN, kernel, iterations=1)
 			masque_numpy = cv2.morphologyEx(masque_numpy, cv2.MORPH_CLOSE, kernel, iterations=1)
 			liste_masques_finaux.append(masque_numpy)
             
@@ -341,7 +341,7 @@ def analyser_lancer(
 		mask = liste_masques[i]
   
 		# nom_fichier = IMAGE_DIR / f"debug_mask_cam{camera_id}_lancer{nbLancer}.png"
-		# A ENLEVER PAR APRES CAR TROP LOURD POUR RIEN, MAIS UTILE POUR LE DEBUG
+		# # A ENLEVER PAR APRES CAR TROP LOURD POUR RIEN, MAIS UTILE POUR LE DEBUG
 		# cv2.imwrite(str(nom_fichier), mask)
   
 		count = compter_flechettes_dans_masque(mask, seuil=SEUIL_AIRE_REDIMENSIONNE)
@@ -434,34 +434,70 @@ def analyser_lancer(
 	print(f"[INFO] Analyse du lancer terminée en {(monotonic() - t_logic_start):.3f} secondes")
 	print(f"[INFO] Temps total analyse du lancer : {(monotonic() - t_debut_analyse):.3f} secondes\n")
 
+def cleanup(sig=None, frame=None):
+    print("\nNettoyage des caméras...")
+    for cap in cameras_ouvertes.values():
+        cap.release()
+    cv2.destroyAllWindows()
+    sys.exit(0)
+
+signal.signal(signal.SIGINT, cleanup)
+signal.signal(signal.SIGTERM, cleanup)
+
+
 def ouvrir_une_camera(camera_id):
     """Tente d'ouvrir une seule caméra (Multithreadé)."""
-    cap = cv2.VideoCapture(camera_id, cv2.CAP_MSMF) # on force explicitement l'api MSMF
+    cap = cv2.VideoCapture(camera_id, cv2.CAP_V4L2)
 
     if cap.isOpened():
-        cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
-        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
-        cap.set(cv2.CAP_PROP_AUTO_EXPOSURE, 0)
+        cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'MJPG'))
+        cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 360)
+        cap.set(cv2.CAP_PROP_FPS, 30)
+        cap.set(cv2.CAP_PROP_AUTO_EXPOSURE, 1) # Désactive l'exposition automatique
         return camera_id, cap
     else:
         print(f"Échec de la caméra {camera_id}.")
         return camera_id, None
 
-def ouvrir_cameras() -> dict[int, cv2.VideoCapture]:
-    """Ouvre les 3 caméras en parallèle"""
-    cameras_ouvertes = {}
-    camera_index = [3, 0, 2] # Les index des 3 caméras
-    with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
-        resultats = executor.map(ouvrir_une_camera, camera_index)
-        for camera_index, cap in resultats:
-            mapping = {3: 1 , 0: 2, 2: 3} 
-            num_camera = mapping.get(camera_index)
-            if cap is not None:
-                cameras_ouvertes[num_camera] = cap
-                print(f"[MAPPING] Caméra matérielle (Windows) {camera_index} associée à l'ID logiciel {num_camera}")
-            else:
-                raise RuntimeError(f"[ERREUR] Impossible d'ouvrir la caméra {num_camera}.")
-    return cameras_ouvertes
+#def ouvrir_cameras() -> dict[int, cv2.VideoCapture]:
+#    """Ouvre les 3 caméras en parallèle"""
+#    cameras_ouvertes = {}
+#    camera_index = ['/dev/video1', '/dev/video5', '/dev/video7'] # Les index des 3 caméras
+#    with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
+#        resultats = executor.map(ouvrir_une_camera, camera_index)
+#        for camera_index, cap in resultats:
+#            mapping = {"/dev/video1": 1 , "/dev/video5": 2, "/dev/video7": 3} 
+#            num_camera = mapping.get(camera_index)
+#            if cap is not None:
+#                cameras_ouvertes[num_camera] = cap
+#                print(f"[MAPPING] Caméra matérielle (Windows) {camera_index} associée à l'ID logiciel {num_camera}")
+#            else:
+#                raise RuntimeError(f"[ERREUR] Impossible d'ouvrir la caméra {num_camera}.")
+#    return cameras_ouvertes
+
+def ouvrir_cameras() -> dict:
+    chemins_cameras = [3, 0, 2]
+    mapping = {
+        3: 1,
+        0: 2,
+        2: 3,
+    }
+    cameras = {}
+    for camera_id in chemins_cameras:
+        print(f"Initialisation de la caméra {camera_id}...")
+        _, cap = ouvrir_une_camera(camera_id)
+        num_camera = mapping[camera_id]
+        if cap is not None:
+            cameras[num_camera] = cap
+            print(f"[OK] Caméra {num_camera} ouverte ({camera_id})")
+        else:
+            for c in cameras.values():
+                c.release()
+            raise RuntimeError(f"[ERREUR] Impossible d'ouvrir la caméra {num_camera} ({camera_id}).")
+        sleep(1)  # Pause vitale pour le bus USB
+    return cameras
+
 
 
 def lire_images_reference(cameras):
@@ -540,7 +576,7 @@ def attendre_reprise_apres_pause(
 
 	print("[PAUSE] Retirez les fléchettes de la cible.")
 
-	stop = False
+	#stop = False
 	while True:
 		try:
 			frames_actuelles = capturer_images_courantes(cameras)
@@ -555,16 +591,16 @@ def attendre_reprise_apres_pause(
 			continue
 		sleep(0.1)
 
-		if keyboard.is_pressed('space'):
-			stop = True
-			print("Fin de la partie.")
-			break
+		#if keyboard.is_pressed('space'):
+		#	stop = True
+		#	print("Fin de la partie.")
+		#	break
 
 	for state in camera_states.values():
 		state.previous_mask = None
 		state.previous_count = 0
 
-	return frames_reference, stop
+	return frames_reference #, stop
 
 
 def main() -> None:
@@ -659,9 +695,9 @@ def main() -> None:
 		# Mise à jour des images de référence pour la prochaine différence de frame.
 		previous_gray = current_gray
 
-		if keyboard.is_pressed('esc'):
-			print("Fin de la partie.")
-			break
+		#if keyboard.is_pressed('esc'):
+		#	print("Fin de la partie.")
+		#	break
 	
 	for camera in cameras.values():
 		camera.release()
