@@ -51,13 +51,13 @@ MASK_CLASS_INDEX = 1 # Classe Point
 # rayon 12 : 400
 # rayon 10 : 300
 # rayon 5 : 70
-MIN_DART_CONTOUR_AREA = 200 # Adri: 200 --- Seuil d'aire pour filtrer les contours de fléchettes valides avec les fausses détections
+MIN_DART_CONTOUR_AREA = 100 # Adri: 200 --- Seuil d'aire pour filtrer les contours de fléchettes valides avec les fausses détections
 MASK_MORPH_KERNEL_SIZE = 3 # Nettoyage des masques
 
 # Paramètres backend
 API_URL = os.getenv("DARTS_API_URL", "http://100.121.0.116:8000/throws/")
 API_KEY = os.getenv("DARTS_API_KEY", "super_secret_key_for_raspberry_api_12345")
-TARGET_ID = os.getenv("DARTS_TARGET_ID", "000004")
+TARGET_ID = os.getenv("DARTS_TARGET_ID", "000001")
 
 HEADERS = {"X-API-Key": API_KEY}
 
@@ -321,7 +321,7 @@ def analyser_lancer(
         
 		for i in range(len(liste_frames_bgr)):
 			masque_numpy = (masques_batch[i] == MASK_CLASS_INDEX).astype(np.uint8) * 255
-			masque_numpy = cv2.morphologyEx(masque_numpy, cv2.MORPH_OPEN, kernel, iterations=1)
+			# masque_numpy = cv2.morphologyEx(masque_numpy, cv2.MORPH_OPEN, kernel, iterations=1)
 			masque_numpy = cv2.morphologyEx(masque_numpy, cv2.MORPH_CLOSE, kernel, iterations=1)
 			liste_masques_finaux.append(masque_numpy)
             
@@ -340,9 +340,9 @@ def analyser_lancer(
 	for i, camera_id in enumerate(camera_ids):
 		mask = liste_masques[i]
   
-		# nom_fichier = IMAGE_DIR / f"debug_mask_cam{camera_id}_lancer{nbLancer}.png"
+		nom_fichier = IMAGE_DIR / f"debug_mask_cam{camera_id}_lancer{nbLancer}.png"
 		# A ENLEVER PAR APRES CAR TROP LOURD POUR RIEN, MAIS UTILE POUR LE DEBUG
-		# cv2.imwrite(str(nom_fichier), mask)
+		cv2.imwrite(str(nom_fichier), mask)
   
 		count = compter_flechettes_dans_masque(mask, seuil=SEUIL_AIRE_REDIMENSIONNE)
 		detections.append(CameraDetection(camera_id=camera_id, mask=mask, dart_count=count))
@@ -590,7 +590,7 @@ def main() -> None:
 	instant_detection = 0.0
 	lancers_depuis_pause = 0
 	
-	nbLancer = 1 # compteur de lancer pour le nommage des images sauvegardées(à supprimer plus tard)
+	nbLancer = 0 # compteur de lancer pour le nommage des images sauvegardées(à supprimer plus tard)
 
 	while True:
 		frames_actuelles = capturer_images_courantes(cameras)
