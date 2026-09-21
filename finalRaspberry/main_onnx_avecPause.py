@@ -370,7 +370,7 @@ def analyser_lancer(
 
 def ouvrir_une_camera(camera_id):
     """Tente d'ouvrir une seule caméra (Multithreadé)."""
-    cap = cv2.VideoCapture(camera_id, cv2.CAP_MSMF) # on force explicitement l'api MSMF
+    cap = cv2.VideoCapture(camera_id, cv2.CAP_MSMF) # on force explicitement l'api MSMF -> DU COUP PAS BON SUR UNE RASPBERRY !!!!!!
 
     if cap.isOpened():
         # Force la résolution 720p

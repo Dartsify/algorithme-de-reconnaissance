@@ -31,7 +31,7 @@ import onnxruntime as ort
 PROJECT_ROOT = Path(__file__).resolve().parent
 IMAGE_DIR = PROJECT_ROOT / "saved_images"
 HOMOGRAPHY_FILE = PROJECT_ROOT / "matrice_homographie"
-MODEL_PATH = PROJECT_ROOT / "models_onnx" / "model_a_tester" / "final_resnet34_r15_1500.onnx"
+MODEL_PATH = PROJECT_ROOT / "models_onnx" / "dartsify_resnet34_local.onnx"
 
 IMAGE_DIR.mkdir(parents=True, exist_ok=True)
 # Paramètres de détection du mouvement
