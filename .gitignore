@@ -3,6 +3,7 @@ Dartsify
 Dartsify_mur
 final/saved_images
 .vscode
+.DS_Store
 # Large local AI model artifacts
 *.pkl
 *.onnx
