@@ -6,6 +6,8 @@ L’objectif est d’installer cet algorithme sur une Raspberry Pi afin de déte
 
 Le projet repart actuellement de zéro sur la partie détection. Une première approche avec **UNET** a été testée, mais elle était trop lente et produisait de mauvais résultats. La nouvelle piste explorée est **YOLO**, qui devrait être mieux adaptée à la détection en temps réel sur Raspberry Pi.
 
+Je vais opter pour YOLOv26.
+
 ## Notes sur la Raspberry Pi
 
 ### Connexion à la Raspberry

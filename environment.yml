@@ -1,0 +1,8 @@
+name: Strady_AlgoReconnaissance
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.14
+  - ultralytics=8.4.156
+  - torchvision=0.28.0

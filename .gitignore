@@ -1,9 +1,8 @@
-image_test
-Dartsify
-Dartsify_mur
-final/saved_images
+datasets/*
+
 .vscode
 .DS_Store
+
 # Large local AI model artifacts
 *.pkl
 *.onnx
