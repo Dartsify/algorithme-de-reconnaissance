@@ -10,6 +10,8 @@ datasets/deepdarts_d1/*
 # Autoriser uniquement le fichier .gitkeep pour forcer l'envoi du dossier
 !datasets/deepdarts_d1/.gitkeep
 
+# Dégager les .csv (en général il s'agit des labels traduits depuis le .pkl)
+*.csv
 
 .vscode
 .DS_Store

@@ -34,7 +34,7 @@ Le script [utils/flatten_deepdarts_images.py](utils/flatten_deepdarts_images.py)
 - il crée `datasets/deepdarts_d1_yolo/` ;
 - il copie les images dans `images/train/` et `images/val/` ;
 - il renomme chaque image avec le nom de sa session pour éviter les doublons, par exemple `d1_02_04_2020__IMG_1081.JPG` ;
-- il crée une copie simplifiée de `labels.pkl` contenant le nouveau nom de l’image et sa `bbox` ;
+- il crée une première copie de `labels.pkl` contenant le nouveau nom de l’image et sa `bbox` ;
 - il conserve le fichier original et les données brutes inchangés.
 
 Le script doit être lancé avec l’environnement Conda du projet, `Strady_AlgoReconnaissance` :
@@ -66,14 +66,44 @@ datasets/
 │   ├── images/
 │   │   ├── train/               # 80 % des sessions
 │   │   └── val/                 # 20 % des sessions
-│   └── labels.pkl               # img_name et bbox simplifiés
+│   └── labels.pkl               # labels YOLO préparés
 ```
 
 La séparation est faite par session complète et non image par image. Les images d’une même session sont très proches ; mettre certaines dans `train` et d’autres dans `val` donnerait une évaluation artificiellement trop optimiste. La graine utilisée par défaut est `0`, ce qui rend la séparation reproductible.
 
 Pour le pré-entraînement sur les 15 000 images DeepDarts, aucun ensemble `test` n’est créé. Le dossier `val` sert à suivre l’entraînement et à sélectionner le meilleur modèle. Un véritable ensemble `test` sera plus pertinent lors du fine-tuning sur les images Strady : une partie de ces images devra alors être conservée à l’écart jusqu’à l’évaluation finale.
 
-Le script prépare actuellement les annotations dans `labels.pkl`, mais ne génère pas encore les fichiers `.txt` attendus par le format YOLO. Cette conversion sera réalisée dans l’étape suivante, après vérification de la convention utilisée par les coordonnées `bbox` de DeepDarts.
+### Nettoyage des annotations
+
+De base, les données brutes de `labels.pkl` contiennent les colonnes : `img_folder`, `img_name`, `bbox` et `xy`. On va modifier tout ça pour ne garder que ce dont on a besoin.
+
+Attention, le fichier `bbox` du dataset original ne correspond pas aux boîtes de détection dans les images `800x800` : il sert au recadrage des images originales avant leur redimensionnement. Les annotations utiles pour les fléchettes se trouvent dans la colonne `xy` du `labels.pkl` original : les quatre premiers points sont des points de calibration et les suivants sont les centres des fléchettes.
+
+Le script [utils/prepare_yolo_labels.py](utils/prepare_yolo_labels.py) relit donc le `labels.pkl` original et remplace la copie située dans `deepdarts_d1_yolo/labels.pkl` :
+
+- il supprime les quatre points de calibration de chaque image ;
+- il conserve uniquement les points correspondant aux fléchettes ;
+- il crée une boîte YOLO de classe `0` autour de chaque point (DeepDarts donnait la classe 0 aux fléchettes, et les classe 1 à 4 aux points de calibrage) ;
+- il utilise une boîte de `0.025 x 0.025` en coordonnées normalisées, soit `20 x 20` pixels pour une image `800x800` (les chercheurs de DeepDarts ont utilisé des bbox de 2,5% de la résolution des images 800x800) ;
+- il ignore les points pour lesquels cette boîte dépasserait les limites de l’image (à la manière encore de DeepDarts, dans `deep-darts/data-loader.py` - visible dans leur repo - on peut le voir).
+
+La commande à lancer est :
+
+```bash
+conda run -n Strady_AlgoReconnaissance \
+	python utils/prepare_yolo_labels.py
+```
+
+Après exécution, le `labels.pkl` préparé contient deux colonnes : `img_name` et `labels`. Chaque élément de `labels` suit la forme YOLO `classe, x_centre, y_centre, largeur, hauteur`, avec des coordonnées normalisées entre `0` et `1`. Le `labels.pkl` original dans `deepdarts_d1/` reste inchangé.
+
+### Vérification des labels pour une image donnée
+
+Afin de vérifier si l'ensemble des conversions n'a pas cassé les labels, on peut vérifier avec le script `utils/see_labels_on_image.py` en écrivant en dur dans le code :
+
+- le nom de l'image ;
+- le tableau de labels généré par le script `utils/prepare_yolo_labels.py` (sous le format `[[classe, x_centre, y_centre, largeur, hauteur]]`).
+
+Le script affiche l'image et montre les éventuelles bbox sur les fléchettes.
 
 ## Notes sur la Raspberry Pi
 

@@ -1,4 +1,4 @@
-"""Inspect one or both labels.pkl files from the repository."""
+"""Visualiser les données contenues dans les fichiers labels.pkl."""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""Prepare a flat, session-aware copy of the DeepDarts dataset."""
+"""Préparer une copie aplatie et separée du dataset DeepDarts."""
 
 from __future__ import annotations
 
