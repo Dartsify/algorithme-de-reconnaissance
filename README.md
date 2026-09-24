@@ -8,6 +8,73 @@ Le projet repart actuellement de zéro sur la partie détection. Une première a
 
 Je vais opter pour YOLOv26.
 
+## Préparation du dataset DeepDarts
+
+Le dataset DeepDarts doit d’abord être extrait ([lien vers le dataset](https://ieee-dataport.org/open-access/deepdarts-dataset)) puis placé dans le dossier `datasets/deepdarts_d1/`.
+Il faut conserver l’arborescence fournie par IEEE : le dossier `cropped_images/800/` contient les sous-dossiers de sessions et le fichier `labels.pkl` se trouve à la racine de `deepdarts_d1/` :
+
+```text
+datasets/
+├── deepdarts_d1/
+│   ├── cropped_images/
+│   │   └── 800/
+│   │       ├── d1_02_04_2020/
+│   │       ├── d1_02_06_2020/
+│   │       └── ...
+│   └── labels.pkl
+```
+
+Le dossier `deepdarts_d1/` est conservé comme archive brute. Il ne faut pas y renommer ou déplacer les images, car le fichier `labels.pkl` original fait le lien entre chaque image et son dossier d’origine grâce aux colonnes `img_folder` et `img_name`.
+
+### Création du dataset préparé
+
+Le script [utils/flatten_deepdarts_images.py](utils/flatten_deepdarts_images.py) prépare une copie adaptée à la suite du projet :
+
+- il lit les images depuis `deepdarts_d1/cropped_images/800/` et les annotations depuis `deepdarts_d1/labels.pkl` ;
+- il crée `datasets/deepdarts_d1_yolo/` ;
+- il copie les images dans `images/train/` et `images/val/` ;
+- il renomme chaque image avec le nom de sa session pour éviter les doublons, par exemple `d1_02_04_2020__IMG_1081.JPG` ;
+- il crée une copie simplifiée de `labels.pkl` contenant le nouveau nom de l’image et sa `bbox` ;
+- il conserve le fichier original et les données brutes inchangés.
+
+Le script doit être lancé avec l’environnement Conda du projet, `Strady_AlgoReconnaissance` :
+
+```bash
+conda run -n Strady_AlgoReconnaissance \
+	python utils/flatten_deepdarts_images.py
+```
+
+(ou en exécutant le script depuis VS Code en ayant choisi le bon environnement conda en bas à droite)
+
+Avant de faire la copie, il est possible de vérifier les opérations avec `--dry-run` :
+
+```bash
+conda run -n Strady_AlgoReconnaissance \
+	python utils/flatten_deepdarts_images.py --dry-run
+```
+
+Le dossier de sortie doit être vide ou ne pas encore exister. Le script s’arrête sinon afin d’éviter d’écraser une préparation précédente.
+
+Après exécution, l’arborescence obtenue est la suivante :
+
+```text
+datasets/
+├── deepdarts_d1/                # données brutes conservées
+│   ├── cropped_images/800/      # images et sessions originales
+│   └── labels.pkl               # annotations originales
+├── deepdarts_d1_yolo/
+│   ├── images/
+│   │   ├── train/               # 80 % des sessions
+│   │   └── val/                 # 20 % des sessions
+│   └── labels.pkl               # img_name et bbox simplifiés
+```
+
+La séparation est faite par session complète et non image par image. Les images d’une même session sont très proches ; mettre certaines dans `train` et d’autres dans `val` donnerait une évaluation artificiellement trop optimiste. La graine utilisée par défaut est `0`, ce qui rend la séparation reproductible.
+
+Pour le pré-entraînement sur les 15 000 images DeepDarts, aucun ensemble `test` n’est créé. Le dossier `val` sert à suivre l’entraînement et à sélectionner le meilleur modèle. Un véritable ensemble `test` sera plus pertinent lors du fine-tuning sur les images Strady : une partie de ces images devra alors être conservée à l’écart jusqu’à l’évaluation finale.
+
+Le script prépare actuellement les annotations dans `labels.pkl`, mais ne génère pas encore les fichiers `.txt` attendus par le format YOLO. Cette conversion sera réalisée dans l’étape suivante, après vérification de la convention utilisée par les coordonnées `bbox` de DeepDarts.
+
 ## Notes sur la Raspberry Pi
 
 ### Connexion à la Raspberry

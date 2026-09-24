@@ -1,4 +1,15 @@
+# Ignorer tout ce qui se trouve dans datasets
 datasets/*
+
+# Autoriser Git à regarder dans le dossier deepdarts_d1
+!datasets/deepdarts_d1/
+
+# Ignorer absolument tous les fichiers à l'intérieur de deepdarts_d1
+datasets/deepdarts_d1/*
+
+# Autoriser uniquement le fichier .gitkeep pour forcer l'envoi du dossier
+!datasets/deepdarts_d1/.gitkeep
+
 
 .vscode
 .DS_Store
