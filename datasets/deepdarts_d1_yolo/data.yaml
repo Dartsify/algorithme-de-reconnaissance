@@ -1,0 +1,6 @@
+# Fichier de configuration propre à YOLO pour l'entrainement sur le dataset DeepDarts (version d1). Il contient les chemins vers les images d'entrainement et de validation, ainsi que le nombre de classes et leurs noms. Ce fichier est utilisé par le fichier de configuration principal "deepdarts_d1.yaml" pour l'entrainement du modèle YOLOv26 Nano.
+
+train: images/train # Dossier des images d'entrainement
+val: images/val # Dossier des images de validation
+nc: 1 # Nombre de classes
+names: ["dart"] # Nom de la classe -> YOLO va chercher ce qui se trouve à l'index 0 de cette liste pour nommer la classe (on avait défini je pense que les fléchettes étaient de la classe 0)

@@ -103,10 +103,10 @@ def prepare_dataset(
     images_root = dataset_dir / "cropped_images" / "800"
     if not images_root.is_dir():
         raise FileNotFoundError(f"Images introuvables : {images_root}")
-    if output_dir.exists() and any(output_dir.iterdir()):
+    if (output_dir / "images").exists() or (output_dir / "labels.pkl").exists():
         raise FileExistsError(
-            f"Le dossier de sortie n'est pas vide : {output_dir}. "
-            "Choisis un autre chemin avec --output."
+            f"Le dossier de sortie contient déjà un dossier 'images' ou un fichier 'labels.pkl' : {output_dir}. "
+            "Choisis un autre chemin avec --output ou nettoie le dossier."
         )
 
     labels = load_labels(labels_path)

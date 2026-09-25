@@ -6,14 +6,15 @@ from PIL import Image
 import os
 import ast
 
-# --- PARAMÈTRES ---
-img_name = "d1_02_04_2020__IMG_1083"
+# Paramètres à modifier selon l'image à visualiser
+# img_name = "d1_02_04_2020__IMG_1083"
+img_name = "d1_02_04_2020__IMG_1081"
 image_path = "datasets/deepdarts_d1_yolo/images/train/" + img_name + ".jpg"
 image_size = 800
 
 # Format YOLO (converti depuis le brut par le script 'convert_labels_to_yolo_format.py') : [[classe, x_centre, y_centre, largeur, hauteur], ...]
-labels_brut = "[[0, 0.527560763888889, 0.19943576388888892, 0.025, 0.025], [0, 0.42339409722222227, 0.4338107638888889, 0.025, 0.025]]" # Prendre les valeurs depuis deepdarts_d1_yolo/labels.pkl pour l'image correspondante
-# ------------------
+# labels_brut = "[[0, 0.527560763888889, 0.19943576388888892, 0.025, 0.025], [0, 0.42339409722222227, 0.4338107638888889, 0.025, 0.025]]" # Prendre les valeurs depuis deepdarts_d1_yolo/labels.pkl pour l'image correspondante
+labels_brut = "[]" # Prendre les valeurs depuis deepdarts_d1_yolo/labels.pkl pour l'image correspondante
 
 if not os.path.exists(image_path):
     print("Erreur : Image introuvable.")
