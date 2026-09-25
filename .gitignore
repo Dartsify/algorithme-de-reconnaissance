@@ -18,13 +18,10 @@ datasets/deepdarts_d1_yolo/*
 # Dégager les .csv (en général il s'agit des labels traduits depuis le .pkl)
 *.csv
 
-# Dégager les .pt
 *.pt
-
-# Dégager les .env
 *.env
-
 wandb/
+runs/
 
 .vscode
 .DS_Store
