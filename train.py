@@ -32,6 +32,7 @@ results = model.train(
     batch=cfg["train"]["batch_size"],
     # lr0=cfg["train"]["lr"], # -> Je le dégage car je laisse le modèle gérer lui même le learning rate (il est déjà optimisé pour YOLO26). Si ça va pas je le remettrai avec AdamW comme optimiseur.
     seed=cfg["train"]["seed"],
+    patience=cfg["train"]["patience"],
 
     # Data aug
     fliplr=cfg["aug"]["flip_lr_prob"],

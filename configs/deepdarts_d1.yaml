@@ -17,11 +17,12 @@ board:
 
 train:
   seed: 0 # Pour avoir une expérience reproductible -> cependant sur mac j'ai un avertissement que certaines opérations ne sont pas déterministes, donc ça ne garantit pas une reproductibilité parfaite. Donc je coupe pour de meilleures perf. (j'ai ajouté dans train un champ "deterministic=False" pour désactiver la reproductibilité et gagner en vitesse).
-  epochs: 100
+  epochs: 300 # Je règle sur 300 car c'est conseillé par ultralytics pour YOLO26. DeepDarts avait mis 100 pour YOLOv4-tiny.
   # batch_size: 16 # Choisi par DeepDarts pour YOLOv4-tiny.
   batch_size: 64 # Pour mon MBP M1 MAX je vais booster le batch_size.
   # batch_size: -1 # YOLO26 va choisir automatiquement le batch_size maximal possible selon la VRAM disponible. Je teste. UPDATE -> MARCHE PAS SUR MAC MAIS QUE SUR LES GPU NVIDIA MACHIN.
   # lr: 0.001 # Je dégage le lr dépassé de DeepDarts pour YOLOv4-tiny. YOLO26 gère le lr automatiquement maintenant. Si ça va pas je choisirai spécifiquement AdamW comme optim. avec un lr.
+  patience: 50 # Si le modèle n'améliore pas sa performance sur la validation pendant 50 epochs, l'entrainement s'arrête.
   # YOLO26 gère nativement le end-to-end sans NMS.
   # Le CIoU est activé par défaut -> on dégage donc des paramètres inutiles du fichier original de DeepDarts.
   val: true
