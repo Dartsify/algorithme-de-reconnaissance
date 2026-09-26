@@ -11,5 +11,6 @@
 - [x] Regarder s'il faut comme DeepDarts établir des poids par défaut depuis ImageNet -> Non c'est par défaut via COCO ;
 - [x] Attaquer le code de l'entrainement ;
 - [x] Script pour convertir `labels.pkl` au format YOLO ;
-- [ ] Lancer entrainement ;
-- [ ] Trouver un moyen de vérifier que ça a "fonctionné".
+- [x] Lancer entrainement ;
+- [ ] Trouver un moyen de vérifier que ça a "fonctionné" ;
+- [ ] Se renseigner pour lancer en parralèle de la suite l'entrainement sur deepdarts_d1 d'un modèle YOLO Pose et non plus Tiny.
