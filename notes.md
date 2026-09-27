@@ -60,3 +60,5 @@ Cependant, je vois ce matin qu'il ne s'est jamais coupé et qu'il était à l'ep
 > En résumé, à l'époque 175, le modèle est infiniment moins "parfait" au pixel près sur le tracé de la boîte (box_loss plus haute), mais il se trompe beaucoup moins sur l'identification de ce qu'il encadre (cls_loss plus basse). Le compromis calculé par la fonction de fitness estime que cette solidité de détection est préférable à la perfection du contour, d'où ce choix final.
 
 </details>
+
+Ensuite, j'ai testé sur des images issues d'internet. Évidemment, y'a tellement de conditions différentes que les résultats sont pas dingues. Néanmoins, niveau temps ça semble relativement rapide : sur mon mac je suis à 11.5ms pour l'inférence, 108.6ms pour le preprocess et 8.9ms pour le postprocess. On verra ce que ça donne sur la Raspberry mais c'est prometteur.
