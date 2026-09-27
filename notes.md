@@ -39,11 +39,11 @@ Donc je propose :
 Fin d'entrainement. Je pensais qu'il allait prendre le best vers 120, mais par peur de tout faire buguer je ne l'ai pas coupé à la main, je voulais qu'il se coupe tout seul.
 Cependant, je vois ce matin qu'il ne s'est jamais coupé et qu'il était à l'epoch 221... Après vérification, il a effectivement pris l'epoch 175 comme meilleure même si selon le graphique elle est clairement moins bonne (le framework utilise une fonction qui prend en compte différentes métriques, donc il juge que le modèle était meilleur à l'epoch 175 qu'à l'epoch 120 malgré la remontée de la val_box - askip il se base aussi sur les mAP).
 
-![alt text](runs/detect/deepdarts_d1_run/graphiques_perso/box_loss.png)
+![alt text](media/yolo_tiny_run_1/box_loss.png)
 
-![alt text](runs/detect/deepdarts_d1_run/graphiques_perso/mAP.png)
+![alt text](media/yolo_tiny_run_1/mAP.png)
 
-![alt text](runs/detect/deepdarts_d1_run/graphiques_perso/precision_recall.png)
+![alt text](media/yolo_tiny_run_1/precision_recall.png)
 
 | epoch | time    | train/box_loss | train/cls_loss | train/l1_loss | metrics/precision (B) | metrics/recall(B) | metrics/mAP50(B) | metrics/mAP50-95(B) | val/box_loss | val/cls_loss | val/l1_loss | lr/pg0   | lr/pg1   | lr/pg2   | lr/pg3   | lr/pg4   | lr/pg5   | lr/pg6   | lr/pg7   |
 | :---- | :------ | :------------- | -------------- | ------------- | --------------------- | ----------------- | ---------------- | ------------------- | ------------ | ------------ | ----------- | -------- | -------- | -------- | -------- | -------- | -------- | -------- | -------- |
