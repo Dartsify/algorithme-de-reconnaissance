@@ -4,8 +4,17 @@ import pandas as pd
 import os
 from pathlib import Path
 
-# --- CONFIGURATION DES CHEMINS ---
-base_dir = "datasets/deepdarts_d1_yolo"
+# Boucle pour demander à l'utilisateur quel dataset il souhaite convertir
+while True:
+    dataset_choice = input("Vous voulez convertir les labels de quel dataset ? (deepdarts_yolo, deepdarts_d1_yolo ou deepdarts_d2_yolo) ?\n> ").strip()
+    
+    if dataset_choice in ["deepdarts_yolo", "deepdarts_d1_yolo", "deepdarts_d2_yolo"]:
+        break
+        
+    print("Erreur : choix invalide. Veuillez entrer exactement l'un des trois noms.")
+
+# Configuration des chemins
+base_dir = "datasets/" + dataset_choice
 pkl_file = os.path.join(base_dir, "labels.pkl")
 
 # Dossiers d'images existants
@@ -15,7 +24,7 @@ img_val_dir = os.path.join(base_dir, "images/val")
 # Dossiers de labels à créer
 lbl_train_dir = os.path.join(base_dir, "labels/train")
 lbl_val_dir = os.path.join(base_dir, "labels/val")
-# ---------------------------------
+
 
 # Création des dossiers de destination
 os.makedirs(lbl_train_dir, exist_ok=True)

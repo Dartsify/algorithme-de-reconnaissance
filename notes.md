@@ -19,7 +19,7 @@ Je me demandais aussi pq on doit pas utiliser de DataLoaders avec pytoch etc com
 
 ## `26-sept-2026`
 
-Pendant l'entrainement sur deepdarts_d1, je vois que toutes les métriques sont bonnes :
+Pendant l'entrainement sur deepdarts, je vois que toutes les métriques sont bonnes :
 
 - Précision (0.977) ;
 - Rappel / Recall (0.962) ;
