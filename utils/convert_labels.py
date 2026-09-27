@@ -13,10 +13,6 @@ while True:
         
     print("Erreur : choix invalide. Veuillez entrer exactement l'un des trois noms.")
 
-# La variable dataset_choice contient maintenant le nom validé.
-# Tu peux l'utiliser pour définir ton chemin de travail, par exemple :
-# base_path = repository_root / "datasets" / dataset_choice
-
 # Configuration des chemins
 base_dir = "datasets/" + dataset_choice
 pkl_file = os.path.join(base_dir, "labels.pkl")
