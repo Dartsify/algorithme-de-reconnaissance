@@ -12,7 +12,6 @@ import pandas as pd
 
 # Note : le code prend en argument le subset qu'on veut extraire (all, d1, d2) et le dossier de sortie est généré automatiquement si non spécifié. Le fichier labels.pkl est également pris en compte pour filtrer les images selon le subset demandé.
 
-
 def parse_args() -> argparse.Namespace:
     repository_root = Path(__file__).resolve().parents[1]
     parser = argparse.ArgumentParser(
