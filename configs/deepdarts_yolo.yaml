@@ -1,10 +1,11 @@
-# Fichier de configuration pour l'entrainement du modèle YOLOv26 Nano sur le dataset DeepDarts (version d1). Il s'agit d'une adaptation du fichier de configuration original de DeepDarts (initialement pour YOLOv4-tiny) pour le framework Ultralytics YOLOv26. Les paramètres d'entrainement, d'augmentation et de modèle sont définis ici.
+# Fichier de configuration pour l'entrainement du modèle YOLOv26 Nano sur le dataset DeepDarts (version d1 ET d2). Il s'agit d'une adaptation du fichier de configuration original de DeepDarts (initialement pour YOLOv4-tiny) pour le framework Ultralytics YOLOv26. Les paramètres d'entrainement, d'augmentation et de modèle sont définis ici.
+# J'ai utilisé cette config pour le premier entrainement.
 
 data:
   # YOLO a besoin d'un fichier YAML séparé décrivant les chemins train/val et les classes.
   # Ce path pointe donc vers ce fichier spécifique à Ultralytics.
-  path: "datasets/deepdarts_d1_yolo/data.yaml"
-  dataset_version: "d1" # Je pense uniquement un tag pour garder une trace de la version du dataset utilisé, ça n'a pas un lien direct avec YOLO. Il devrait être envoyé à wandb.
+  path: "datasets/deepdarts_yolo/data.yaml"
+  dataset_version: "d1 et d2" # Je pense uniquement un tag pour garder une trace de la version du dataset utilisé, ça n'a pas un lien direct avec YOLO. Il devrait être envoyé à wandb.
 
 board:
   # Données gardées du fichier de config. initial de DeepDarts. Il s'agit des valeurs de différentes dimensions d'une cible standard.
@@ -26,8 +27,8 @@ train:
   # YOLO26 gère nativement le end-to-end sans NMS.
   # Le CIoU est activé par défaut -> on dégage donc des paramètres inutiles du fichier original de DeepDarts.
   val: true
-  project: "runs/deepdarts_d1" # Dossier de sortie pour les runs d'entrainement.
-  name: "deepdarts_d1_run" # Nom du run en local et précisé également à wandb
+  project: "runs/deepdarts_yolo" # Dossier de sortie pour les runs d'entrainement.
+  name: "deepdarts_yolo_run" # Nom du run en local et précisé également à wandb
 
 aug:
   # Équivalents YOLO26 des augmentations DeepDarts

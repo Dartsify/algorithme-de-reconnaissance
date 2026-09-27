@@ -1,4 +1,6 @@
-# Fichier de configuration propre à YOLO pour l'entrainement sur le dataset DeepDarts (version d1). Il contient les chemins vers les images d'entrainement et de validation, ainsi que le nombre de classes et leurs noms. Ce fichier est utilisé par le fichier de configuration principal "deepdarts_d1.yaml" pour l'entrainement du modèle YOLOv26 Nano.
+# Fichier de configuration propre à YOLO pour l'entrainement sur le dataset DeepDarts. Il contient les chemins vers les images d'entrainement et de validation, ainsi que le nombre de classes et leurs noms. Ce fichier est utilisé dans chaque fichier de config. d'entrainement.
+
+# Ce fichier est généré automatiquement par le script 'flatten_deepdarts_images.py' lors de la préparation du dataset pour YOLO.
 
 train: images/train # Dossier des images d'entrainement
 val: images/val # Dossier des images de validation

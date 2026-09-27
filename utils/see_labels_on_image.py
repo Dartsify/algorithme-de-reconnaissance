@@ -9,7 +9,7 @@ import ast
 # Paramètres à modifier selon l'image à visualiser
 # ---
 img_name = "d1_02_06_2020__IMG_1331"
-image_path = "datasets/deepdarts_d1_yolo/images/train/" + img_name + ".JPG"
+image_path = "datasets/deepdarts_d1_yolo/images/train/" + img_name + ".jpg"
 image_size = 800
 
 # Format YOLO (converti depuis le brut par le script 'convert_labels_to_yolo_format.py') : [[classe, x_centre, y_centre, largeur, hauteur], ...]

@@ -10,11 +10,6 @@ datasets/deepdarts/*
 # Autoriser uniquement le fichier .gitkeep pour forcer l'envoi du dossier
 !datasets/deepdarts/.gitkeep
 
-# Faire pareil pour deepdarts_d1_yolo
-!datasets/deepdarts_d1_yolo/
-datasets/deepdarts_d1_yolo/*
-!datasets/deepdarts_d1_yolo/data.yaml
-
 # Dégager les .csv (en général il s'agit des labels traduits depuis le .pkl)
 *.csv
 

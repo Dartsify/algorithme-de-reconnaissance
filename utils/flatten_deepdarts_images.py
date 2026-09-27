@@ -167,6 +167,20 @@ def prepare_dataset(
         with (output_dir / "labels.pkl").open("wb") as handle:
             pickle.dump(pd.DataFrame(output_labels), handle)
 
+        # Création du fichier data.yaml dans le dossier de sortie pour YOLO
+        yaml_content = """# Fichier de configuration propre à YOLO pour l'entrainement sur le dataset DeepDarts. Il contient les chemins vers les images d'entrainement et de validation, ainsi que le nombre de classes et leurs noms. Ce fichier est utilisé dans chaque fichier de config. d'entrainement.
+
+# Ce fichier est généré automatiquement par le script 'flatten_deepdarts_images.py' lors de la préparation du dataset pour YOLO.
+
+train: images/train # Dossier des images d'entrainement
+val: images/val # Dossier des images de validation
+nc: 1 # Nombre de classes
+names: ["dart"] # Nom de la classe -> YOLO va chercher ce qui se trouve à l'index 0 de cette liste pour nommer la classe (on avait défini je pense que les fléchettes étaient de la classe 0)
+"""
+
+    yaml_path = output_dir / "data.yaml"
+    yaml_path.write_text(yaml_content, encoding="utf-8")
+
     return len(output_labels), sum(split == "val" for split in session_split.values())
 
 

@@ -17,8 +17,8 @@ Je vais opter pour YOLOv26 Tiny.
   - [3. Vérification des labels pour une image donnée](#3-vérification-des-labels-pour-une-image-donnée)
   - [4. Conversion finale des labels au format YOLO](#4-conversion-finale-des-labels-au-format-yolo)
 - [Configuration de l'entraînement](#configuration-de-lentraînement)
-  - [Le fichier `data.yaml`](#le-fichier-datayaml)
-  - [Le fichier `deepdarts_d1.yaml`](#le-fichier-deepdarts_d1yaml)
+  - [Les fichiers `data.yaml`](#les-fichiers-datayaml)
+  - [Le fichier configs/deepdarts_yolo.yaml](#le-fichier-configsdeepdarts_yoloyaml)
 - [Premier entraînement (Baseline) et Suivi](#premier-entraînement-baseline-et-suivi)
 - [Notes sur la Raspberry Pi](#notes-sur-la-raspberry-pi)
   - [Connexion à la Raspberry](#connexion-à-la-raspberry)
@@ -183,20 +183,23 @@ YOLO ne sait pas lire les fichiers de données Python sérialisés (`.pkl`). Il 
 
 Tous les paramètres importants de l'algorithme sont centralisés dans deux fichiers distincts.
 
-### Le fichier `data.yaml`
+### Les fichiers `data.yaml`
 
 Il est purement informatif pour le framework YOLO. Il indique uniquement les chemins relatifs vers les dossiers d'images (`images/train` et `images/val`), le nombre de classes (`nc: 1`), et le nom de la classe ciblée (`names: ["dart"]`).
 
-### Le fichier `deepdarts_d1.yaml`
+### Le fichier [configs/deepdarts_yolo.yaml](configs/deepdarts_yolo.yaml)
 
 C'est le centre de contrôle du projet. Il regroupe les hyperparamètres d'apprentissage, les paramètres du modèle (YOLOv26 Nano), les règles d'augmentation visuelle, et les chemins de sauvegarde.
+
+> [!NOTE]
+> Il s'agit du fichier associé à `deepdarts_yolo` (regroupant les subsets `d1` et `d2`) mais il existe un fichier similaire pour les deux autres configuration de subsets.
 
 > [!NOTE]
 > Les seuls paramètres qui ne figurent pas dans ce fichier de configuration sont workers, device et le caractère deterministic. Étant strictement liés à l'optimisation de l'exécution matérielle locale, ils sont écrits en dur directement dans l'appel de la fonction du script [train.py](train.py).
 
 ## Premier entraînement (Baseline) et Suivi
 
-Pour cette première approche sur les données DeepDarts, plusieurs partis pris techniques ont été appliqués dans [train.py](train.py) et [configs/deepdarts_d1.yaml](configs/deepdarts_d1.yaml) :
+Pour cette première approche sur les données DeepDarts, plusieurs partis pris techniques ont été appliqués dans [train.py](train.py) et [configs/deepdarts_d1_yolo.yaml](configs/deepdarts_d1_yolo.yaml) :
 
 - **Optimisation matérielle (Mac M1 Max) :** Le `batch_size` a été fixé à 32 pour exploiter la mémoire unifiée. Le déterminisme strict a été désactivé (`deterministic=False`) afin de contourner une limitation du backend MPS de PyTorch, évitant ainsi les crashs et accélérant les calculs.
 - **Apprentissage intelligent :** Le taux d'apprentissage (Learning Rate) manuel a été retiré pour laisser le mode auto-pilote de YOLO déterminer le meilleur optimiseur. L'entraînement est configuré sur 300 epochs, couplé à un mécanisme d'Early Stopping (`patience: 50`) qui stoppe l'apprentissage si les performances de validation stagnent, empêchant le surapprentissage.
