@@ -2,6 +2,7 @@
 
 import pandas as pd
 
+# Chemin vers le fichier labels.pkl à lire
 # path = "datasets/deepdarts_d1/labels.pkl"
 path = "datasets/deepdarts_d1_yolo/labels.pkl"
 

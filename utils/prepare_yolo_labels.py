@@ -14,31 +14,27 @@ DEFAULT_BBOX_SIZE = 0.025 # Comme stipulé dans le rapport de DeepDarts, 2.5% de
 
 
 def parse_args() -> argparse.Namespace:
-    repository_root = Path(__file__).resolve().parents[1]
-    dataset_dir = repository_root / "datasets" / "deepdarts_d1"
-    output_dir = repository_root / "datasets" / "deepdarts_d1_yolo"
-
     parser = argparse.ArgumentParser(
         description="Prepare les labels de flechettes au format YOLO."
     )
-    parser.add_argument(
-        "--source-labels",
-        type=Path,
-        default=dataset_dir / "labels.pkl",
-        help="labels.pkl original contenant img_folder, img_name et xy.",
-    )
-    parser.add_argument(
-        "--output-labels",
-        type=Path,
-        default=output_dir / "labels.pkl",
-        help="labels.pkl simplifie a creer dans le dataset YOLO.",
-    )
-    parser.add_argument(
-        "--images-dir",
-        type=Path,
-        default=output_dir / "images",
-        help="Dossier contenant les images train et val.",
-    )
+    # parser.add_argument(
+    #     "--source-labels",
+    #     type=Path,
+    #     default=dataset_dir / "labels.pkl",
+    #     help="labels.pkl original contenant img_folder, img_name et xy.",
+    # )
+    # parser.add_argument(
+    #     "--output-labels",
+    #     type=Path,
+    #     default=output_dir / "labels.pkl",
+    #     help="labels.pkl simplifie a creer dans le dataset YOLO.",
+    # )
+    # parser.add_argument(
+    #     "--images-dir",
+    #     type=Path,
+    #     default=output_dir / "images",
+    #     help="Dossier contenant les images train et val.",
+    # )
     parser.add_argument(
         "--image-size",
         type=int,
@@ -69,8 +65,10 @@ def load_source_labels(path: Path) -> pd.DataFrame:
     return labels
 
 
-def output_image_path(images_dir: Path, image_name: str) -> Path:
+def output_image_path(images_dir: Path, image_name: str) -> Path | None:
     matches = list(images_dir.glob(f"*/{image_name}"))
+    if not matches:
+        return None
     if len(matches) != 1:
         raise FileNotFoundError(
             f"Impossible de retrouver une image unique pour {image_name} "
@@ -99,6 +97,10 @@ def prepare_labels(
     for row in source_labels.itertuples(index=False):
         image_name = f"{row.img_folder}__{row.img_name}"
         image_path = output_image_path(images_dir, image_name)
+
+        if image_path is None:
+            continue  # On ignore les images qui ne sont pas trouvées dans le dossier d'images (notamment si on veut juste le dataset d1 ou d2)
+
         if image_path.suffix.lower() not in {".jpg", ".jpeg", ".png", ".bmp"}:
             raise ValueError(f"Format d'image non gere : {image_path}")
 
@@ -122,25 +124,42 @@ def prepare_labels(
     with output_labels_path.open("wb") as handle:
         pickle.dump(pd.DataFrame(prepared_rows), handle)
 
-    print(f"{len(prepared_rows)} image(s) traitees.")
-    print(f"{sum(len(row['labels']) for row in prepared_rows)} flechette(s) conservee(s).")
-    print(f"{discarded_points} point(s) ignore(s) car la boite depassait l'image.")
-    print(f"Calibration supprimee : 4 point(s) par image.")
+    print(f"{len(prepared_rows)} image(s) traitée(s).")
+    print(f"{sum(len(row['labels']) for row in prepared_rows)} fléchette(s) conservée(s).")
+    print(f"{discarded_points} point(s) ignoré(s) car la boite dépassait l'image.")
+    print(f"Calibration supprimée : 4 point(s) par image.")
     print(
-        f"Boites YOLO : {bbox_size} x {bbox_size} normalise, "
+        f"Boites YOLO : {bbox_size} x {bbox_size} normalisé, "
         f"soit {expected_pixel_size:g} x {expected_pixel_size:g} pixels en "
         f"{image_size}x{image_size}."
     )
-    print(f"Labels ecrits dans : {output_labels_path}")
+    print(f"Labels écrits dans : {output_labels_path}")
     return len(prepared_rows)
 
 
 def main() -> None:
+    # Boucle pour demander à l'utilisateur quel dataset il souhaite convertir
+    while True:
+        dataset_choice = input("Vous voulez préparer les labels pour quel dataset ? (deepdarts_yolo, deepdarts_d1_yolo ou deepdarts_d2_yolo) ?\n> ").strip()
+        
+        if dataset_choice in ["deepdarts_yolo", "deepdarts_d1_yolo", "deepdarts_d2_yolo"]:
+            break
+        
+        print("Erreur : choix invalide. Veuillez entrer exactement l'un des trois noms.")
+
+    # Config. dynamique des chemins en fonction du choix de l'utilisateur
+    repository_root = Path(__file__).resolve().parents[1]
+    source_labels = repository_root / "datasets" / "deepdarts" / "labels.pkl"
+    
+    output_dir = repository_root / "datasets" / dataset_choice
+    output_labels = output_dir / "labels.pkl"
+    images_dir = output_dir / "images"
+
     args = parse_args()
     prepare_labels(
-        args.source_labels,
-        args.output_labels,
-        args.images_dir,
+        source_labels,
+        output_labels,
+        images_dir,
         args.image_size,
         args.bbox_size,
     )

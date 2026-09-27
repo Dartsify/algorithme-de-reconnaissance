@@ -10,6 +10,8 @@ from pathlib import Path
 
 import pandas as pd
 
+# Note : le code prend en argument le subset qu'on veut extraire (all, d1, d2) et le dossier de sortie est généré automatiquement si non spécifié. Le fichier labels.pkl est également pris en compte pour filtrer les images selon le subset demandé.
+
 
 def parse_args() -> argparse.Namespace:
     repository_root = Path(__file__).resolve().parents[1]
@@ -19,17 +21,26 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--dataset",
         type=Path,
-        default=repository_root / "datasets" / "deepdarts_d1",
+        default=repository_root / "datasets" / "deepdarts",
     )
     parser.add_argument(
         "--output",
         type=Path,
-        default=repository_root / "datasets" / "deepdarts_d1_yolo",
+        default=None,
+        help="Dossier de sortie. Généré automatiquement si non spécifié.",
     )
     parser.add_argument(
         "--labels",
         type=Path,
-        default=repository_root / "datasets" / "deepdarts_d1" / "labels.pkl",
+        default=None,
+        help="Chemin vers labels.pkl. Par défaut : <dataset>/labels.pkl",
+    )
+    parser.add_argument(
+        "--subset",
+        type=str,
+        choices=["all", "d1", "d2"],
+        default="all",
+        help="Sous-ensemble à extraire (all, d1, d2). Définit le dossier de sortie par défaut.",
     )
     parser.add_argument(
         "--val-ratio",
@@ -56,7 +67,7 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def load_labels(labels_path: Path) -> pd.DataFrame:
+def load_labels(labels_path: Path, subset: str) -> pd.DataFrame:
     with labels_path.open("rb") as handle:
         labels = pickle.load(handle)
 
@@ -65,6 +76,18 @@ def load_labels(labels_path: Path) -> pd.DataFrame:
     if missing_columns:
         missing = ", ".join(sorted(missing_columns))
         raise ValueError(f"Colonnes absentes de labels.pkl : {missing}")
+
+    # Filtrage du dataset selon le subset demandé
+    if subset != "all":
+        if "dataset" in labels.columns:
+            labels = labels[labels["dataset"] == subset]
+        else:
+            # Rabattement sur le nom du dossier si la colonne 'dataset' n'existe pas
+            labels = labels[labels["img_folder"].str.contains(subset, case=False)]
+            
+    if labels.empty:
+        raise ValueError(f"Aucune image trouvée pour le sous-ensemble '{subset}'.")
+
     return labels
 
 
@@ -91,6 +114,7 @@ def prepare_dataset(
     dataset_dir: Path,
     output_dir: Path,
     labels_path: Path,
+    subset: str,
     val_ratio: float,
     seed: int,
     no_split: bool,
@@ -109,7 +133,7 @@ def prepare_dataset(
             "Choisis un autre chemin avec --output ou nettoie le dossier."
         )
 
-    labels = load_labels(labels_path)
+    labels = load_labels(labels_path, subset)
     sessions = sorted(labels["img_folder"].unique())
     session_split = build_session_split(sessions, val_ratio, seed, no_split)
     source_files = {}
@@ -149,18 +173,31 @@ def prepare_dataset(
 
 def main() -> None:
     args = parse_args()
+
+    # Remplacement des chemins par défaut manquants
+    if args.labels is None:
+        args.labels = args.dataset / "labels.pkl"
+        
+    if args.output is None:
+        if args.subset == "all":
+            args.output = args.dataset.parent / "deepdarts_yolo"
+        else:
+            args.output = args.dataset.parent / f"deepdarts_{args.subset}_yolo"
+
+
     image_count, validation_sessions = prepare_dataset(
         args.dataset,
         args.output,
         args.labels,
+        args.subset,
         args.val_ratio,
         args.seed,
         args.no_split,
         args.dry_run,
     )
-    action = "seraient preparees" if args.dry_run else "preparees"
-    print(f"{image_count} image(s) {action}.")
-    print(f"{validation_sessions} session(s) reservee(s) a la validation.")
+    action = "seraient préparées" if args.dry_run else "préparées"
+    print(f"{image_count} image(s) {action} vers {args.output.name}.")
+    print(f"{validation_sessions} session(s) reservee(s) à la validation.")
 
 
 if __name__ == "__main__":

@@ -32,8 +32,9 @@ def parse_args() -> argparse.Namespace:
     )
     parser.set_defaults(
         default_paths=(
-            repository_root / "datasets" / "deepdarts_d1" / "labels.pkl",
+            repository_root / "datasets" / "deepdarts" / "labels.pkl",
             repository_root / "datasets" / "deepdarts_d1_yolo" / "labels.pkl",
+            repository_root / "datasets" / "deepdarts_yolo" / "labels.pkl",
         )
     )
     return parser.parse_args()
