@@ -11,31 +11,31 @@ Je vais opter pour YOLOv26.
 ## Table des matières <!-- omit in toc -->
 
 - [Préparation du dataset DeepDarts avant entrainement](#préparation-du-dataset-deepdarts-avant-entrainement)
-	- [1. Création du dataset préparé](#1-création-du-dataset-préparé)
-	- [2. Nettoyage des annotations](#2-nettoyage-des-annotations)
-	- [3. Vérification des labels pour une image donnée](#3-vérification-des-labels-pour-une-image-donnée)
-	- [4. Conversion finale des labels au format YOLO](#4-conversion-finale-des-labels-au-format-yolo)
+  - [1. Création du dataset préparé](#1-création-du-dataset-préparé)
+  - [2. Nettoyage des annotations](#2-nettoyage-des-annotations)
+  - [3. Vérification des labels pour une image donnée](#3-vérification-des-labels-pour-une-image-donnée)
+  - [4. Conversion finale des labels au format YOLO](#4-conversion-finale-des-labels-au-format-yolo)
 - [Configuration de l'entraînement](#configuration-de-lentraînement)
-	- [Le fichier `data.yaml`](#le-fichier-datayaml)
-	- [Le fichier `deepdarts_d1.yaml`](#le-fichier-deepdarts_d1yaml)
+  - [Le fichier `data.yaml`](#le-fichier-datayaml)
+  - [Le fichier `deepdarts_d1.yaml`](#le-fichier-deepdarts_d1yaml)
 - [Premier entraînement (Baseline) et Suivi](#premier-entraînement-baseline-et-suivi)
 - [Notes sur la Raspberry Pi](#notes-sur-la-raspberry-pi)
-	- [Connexion à la Raspberry](#connexion-à-la-raspberry)
-		- [Câble Ethernet Raspberry - Box WiFi](#câble-ethernet-raspberry---box-wifi)
-		- [Câble Ethernet Raspberry - Ordinateur](#câble-ethernet-raspberry---ordinateur)
-		- [WiFi](#wifi)
-	- [Éteindre la Raspberry](#éteindre-la-raspberry)
+  - [Connexion à la Raspberry](#connexion-à-la-raspberry)
+    - [Câble Ethernet Raspberry - Box WiFi](#câble-ethernet-raspberry---box-wifi)
+    - [Câble Ethernet Raspberry - Ordinateur](#câble-ethernet-raspberry---ordinateur)
+    - [WiFi](#wifi)
+  - [Éteindre la Raspberry](#éteindre-la-raspberry)
 
 ## Préparation du dataset DeepDarts avant entrainement
 
 > Le dataset DeepDarts doit être extrait et traité afin de correspondre aux attentes et formats de YOLO26. Je vais donc détailler dans cette section toutes les étapes nécessaires avant de lancer un entrainement. Ces étapes doivent être exécutés dans l'ordre établi.
 
-Le dataset DeepDarts doit d’abord être extrait ([lien vers le dataset](https://ieee-dataport.org/open-access/deepdarts-dataset)) puis placé dans le dossier `datasets/deepdarts_d1/`.
-Il faut conserver l’arborescence fournie par IEEE : le dossier `cropped_images/800/` contient les sous-dossiers de sessions et le fichier `labels.pkl` se trouve à la racine de `deepdarts_d1/` :
+Le dataset DeepDarts doit d’abord être extrait ([lien vers le dataset](https://ieee-dataport.org/open-access/deepdarts-dataset)) puis placé dans le dossier `datasets/deepdarts/`.
+Il faut conserver l’arborescence fournie par IEEE : le dossier `cropped_images/800/` contient les sous-dossiers de sessions et le fichier `labels.pkl` se trouve à la racine de `deepdarts/` :
 
 ```text
 datasets/
-├── deepdarts_d1/
+├── deepdarts/
 │   ├── cropped_images/
 │   │   └── 800/
 │   │       ├── d1_02_04_2020/
@@ -44,7 +44,7 @@ datasets/
 │   └── labels.pkl
 ```
 
-Le dossier `deepdarts_d1/` est conservé comme archive brute. Il ne faut pas y renommer ou déplacer les images, car le fichier `labels.pkl` original fait le lien entre chaque image et son dossier d’origine grâce aux colonnes `img_folder` et `img_name`.
+Le dossier `deepdarts/` est conservé comme archive brute. Il ne faut pas y renommer ou déplacer les images, car le fichier `labels.pkl` original fait le lien entre chaque image et son dossier d’origine grâce aux colonnes `img_folder` et `img_name`.
 
 Les étapes suivantes détaillent les différents script à exécuter dans cet ordre précis :
 
@@ -57,7 +57,7 @@ Les étapes suivantes détaillent les différents script à exécuter dans cet o
 
 Le script [utils/flatten_deepdarts_images.py](utils/flatten_deepdarts_images.py) prépare une copie adaptée à la suite du projet :
 
-- il lit les images depuis `deepdarts_d1/cropped_images/800/` et les annotations depuis `deepdarts_d1/labels.pkl` ;
+- il lit les images depuis `deepdarts/cropped_images/800/` et les annotations depuis `deepdarts/labels.pkl` ;
 - il crée `datasets/deepdarts_d1_yolo/` ;
 - il copie les images dans `images/train/` et `images/val/` ;
 - il renomme chaque image avec le nom de sa session pour éviter les doublons, par exemple `d1_02_04_2020__IMG_1081.JPG` ;
@@ -86,7 +86,7 @@ Après exécution, l’arborescence obtenue est la suivante :
 
 ```text
 datasets/
-├── deepdarts_d1/                # données brutes conservées
+├── deepdarts/                # données brutes conservées
 │   ├── cropped_images/800/      # images et sessions originales
 │   └── labels.pkl               # annotations originales
 ├── deepdarts_d1_yolo/
@@ -121,7 +121,7 @@ conda run -n Strady_AlgoReconnaissance \
 	python utils/prepare_yolo_labels.py
 ```
 
-Après exécution, le `labels.pkl` préparé contient deux colonnes : `img_name` et `labels`. Chaque élément de `labels` suit la forme YOLO `classe, x_centre, y_centre, largeur, hauteur`, avec des coordonnées normalisées entre `0` et `1`. Le `labels.pkl` original dans `deepdarts_d1/` reste inchangé.
+Après exécution, le `labels.pkl` préparé contient deux colonnes : `img_name` et `labels`. Chaque élément de `labels` suit la forme YOLO `classe, x_centre, y_centre, largeur, hauteur`, avec des coordonnées normalisées entre `0` et `1`. Le `labels.pkl` original dans `deepdarts/` reste inchangé.
 
 ### 3. Vérification des labels pour une image donnée
 
