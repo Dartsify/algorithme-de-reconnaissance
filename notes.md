@@ -145,3 +145,11 @@ Je me suis dit : de base on donne l'image en entier vue par chacune des caméras
 Les éléments extérieurs (ici les chaussures) sont visibles. Je pense que ça n'a pas de sens d'entrainer YOLO avec ça et de lui donner ces parties de l'image durant la phase d'inférence. Donc je me dis : il faudrait que lorsque les caméras "prennent" les 3 photos, on redimensionne direct pour dégager les côtés inutiles.
 
 De là, l'IA me dit que ce serait même mieux de tenter d'extraire un carré (c'est déjà le ratio utilisé par le dataset deepdarts d1) et d'également appliquer l'homographie sur l'image afin de la recentrer. Ça permettrait d'entrainer YOLO sur un dataset plus ressemblant à ce qu'il a déjà vu dans le dataset d1.
+
+Donc je me demande également si au moment de l'annotation, il faut annoter les images déjà carrées et centrées ?
+
+Même question si on veut tester l'entrainement d'un YOLO Pose -> étant donné qu'il n'a pas strictement la même convention d'annotation que pour le YOLO classique, comment faire ?
+
+L'IA me conseilles de directement annoter pour YOLO Pose et de dégager après à l'aide d'un script les données liées uniquement à Pose si je veux utiliser ce dataset sur un YOLO classique. Encore d'après elle, si on annote sur le dataset brut (sans centrage) via Keypoints, on pourra avec un script simplement transposer les coordonnées de la pointe de la flèche (déjà renseigné lors de l'annotation) et ce sera parfaitement précis. Ensuite, si on veut vraiment avoir une bbox comme dans le dataset d1, on aura qu'à générer une bbox de taille constante centrée en ce point.
+
+-> Dès lors, tout nous mène à annoter via la convention Keypoints plutôt que de la simple Object Detection.
