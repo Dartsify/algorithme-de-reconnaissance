@@ -6,6 +6,7 @@
 - [`26-sept-2026`](#26-sept-2026)
 - [`27-sept-2026 (a)`](#27-sept-2026-a)
 - [`27-sept-2026 (b)`](#27-sept-2026-b)
+- [`28-sept-2026`](#28-sept-2026)
 
 ## `25-sept-2026`
 
@@ -134,3 +135,13 @@ D'après l'ia, exploiter d2 entre d1 et notre dataset serait une perte de temps
 > - Garder ce modèle actuel et tenter le transfer learning sur notre dataset ;
 > - Ré-entrainer le YOLO26 Tiny avec uniquement le dataset d1 (et procéder au transfer et comparer les deux modèles finaux, celui avec la pollution du d2 et celui sans) ;
 > - Entrainer un YOLO Pose avec uniquement nos images (on exploite plus du tout dès lors le dataset de DeepDarts).
+
+## `28-sept-2026`
+
+Je me suis dit : de base on donne l'image en entier vue par chacune des caméras. Cependant, comme on peut le voir sur cette image :
+
+![alt text](media/cam1_020526_124254.jpg)
+
+Les éléments extérieurs (ici les chaussures) sont visibles. Je pense que ça n'a pas de sens d'entrainer YOLO avec ça et de lui donner ces parties de l'image durant la phase d'inférence. Donc je me dis : il faudrait que lorsque les caméras "prennent" les 3 photos, on redimensionne direct pour dégager les côtés inutiles.
+
+De là, l'IA me dit que ce serait même mieux de tenter d'extraire un carré (c'est déjà le ratio utilisé par le dataset deepdarts d1) et d'également appliquer l'homographie sur l'image afin de la recentrer. Ça permettrait d'entrainer YOLO sur un dataset plus ressemblant à ce qu'il a déjà vu dans le dataset d1.
