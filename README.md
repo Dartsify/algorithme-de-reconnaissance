@@ -20,6 +20,11 @@ Je vais opter pour YOLOv26 Tiny.
   - [Les fichiers `data.yaml`](#les-fichiers-datayaml)
   - [Le fichier configs/deepdarts_yolo.yaml](#le-fichier-configsdeepdarts_yoloyaml)
 - [Premier entraînement (Baseline) et Suivi](#premier-entraînement-baseline-et-suivi)
+- [Création de notre dataset](#création-de-notre-dataset)
+- [Pipeline de préparation d'entrainement sur notre dataset](#pipeline-de-préparation-dentrainement-sur-notre-dataset)
+  - [Récupération du dataset](#récupération-du-dataset)
+  - [Traitement des images](#traitement-des-images)
+  - [Conversion du dataset pour YOLO classique (Tiny ou autre)](#conversion-du-dataset-pour-yolo-classique-tiny-ou-autre)
 - [Notes sur la Raspberry Pi](#notes-sur-la-raspberry-pi)
   - [Connexion à la Raspberry](#connexion-à-la-raspberry)
     - [Câble Ethernet Raspberry - Box WiFi](#câble-ethernet-raspberry---box-wifi)
@@ -205,6 +210,48 @@ Pour cette première approche sur les données DeepDarts, plusieurs partis pris 
 - **Apprentissage intelligent :** Le taux d'apprentissage (Learning Rate) manuel a été retiré pour laisser le mode auto-pilote de YOLO déterminer le meilleur optimiseur. L'entraînement est configuré sur 300 epochs, couplé à un mécanisme d'Early Stopping (`patience: 50`) qui stoppe l'apprentissage si les performances de validation stagnent, empêchant le surapprentissage.
 - **Augmentations visuelles :** La fonction mosaic a été désactivée (0.0) car elle détruit la cohérence globale de la cible. En revanche, une perspective de 0.001 a été ajoutée pour reproduire nativement les déformations d'angle de caméra initialement codées par DeepDarts.
 - **Suivi avec Weights & Biases (WandB) :** L'entraînement est connecté à WandB via `wandb.login()` et `wandb.init()`. Cependant, le script indique à YOLO de sauvegarder les poids et les résultats de détection en local dans le dossier pointé par `name=cfg["train"]["name"]`. Par conséquent, WandB ne réceptionne que les logs et affiche les métriques système de la machine (température CPU, utilisation GPU, etc.). Pour pallier cela lors de cette première session, l'évolution de la précision (mAP) et des pertes (Loss) a été tracée manuellement via des graphiques Excel à partir du fichier results.csv généré en local.
+
+## Création de notre dataset
+
+On a décidé d'utiliser les anciennes images afin d'avoir un dataset plus grand et de commencer à annoter avant de re disposer du dispositif complètement monté. On a annoté les images dans Roboflow pour un modèle YOLO Pose car cela permet, après conversion, d'avoir également un dataset prêt à l'emploi pour un modèle YOLO classique. On exporte les images de Roboflow sans pré-traitement car nous le faisons nous même dans les scripts du dossier `utils/strady/`. Pourquoi ? Car nous avons décidé de rogner les côtés gauche et droit des images avant de les resize pour ne pas donner ça à YOLO (c'est complètement superflus) -> on ne sait pas le faire lors de l'export du dataset dans Roboflow. J'ai donc créé différents scripts afin de convertir le dataset dans les formats dont nous avons besoin :
+
+- **[`utils/strady/crop_and_resize.py`](utils/strady/crop_and_resize.py) :** s'occupe de prendre les images du dossier exporté de Roboflow et de les placer dans un nouveau dossier `datasets/strady_yolo_pose` (il les coupe et les redimensionne) ainsi que d'y placer les labels et une conversion du fichier `data.yaml` ;
+- **[`utils/strady/convert_from_pose_to_tiny.py`](utils/strady/convert_from_pose_to_tiny.py) :** s'occupe de convertir les labels dans le format YOLO classique et de créer le dossier `datasets/strady_yolo` avec l'ensemble des images et des labels ;
+- **[utils/strady/see_labels_on_image.py](utils/strady/see_labels_on_image.py) :** s'occupe d'afficher un retour visuel, il prend une image choisie dans le code et affiche les labels dessus (les bbox, la pointe etc) en fonction du dossier de l'image choisie.
+
+## Pipeline de préparation d'entrainement sur notre dataset
+
+### Récupération du dataset
+
+Il faut télécharger une version danas Roboflow contenant l'ensemble des images avec le bon split décidé lors de l'ajout des images au dataset. Il ne faut pas choisir de pré-traitement (pas de rognage, redimensionnement, passage au gris etc). Ce sont nos scripts qui s'en occupent. Ensuite, on décide de télécharger en `.zip`.
+
+Après le téléchargement du zip, il faut placer tous les fichiers et dossiers se trouvant dans le dossier dézippé dans le dossier [datasets/strady](datasets/strady/).
+
+### Traitement des images
+
+Il faut maintenant exécuter le script [utils/strady//crop_and_resize.py](utils/strady//crop_and_resize.py). Il va créer le dossier `datasets/strady_yolo_pose` et y placer tous les fichiers nécessaires.
+
+Ce script effectue quatre actions principales pour adapter tes données brutes au format de ton projet (YOLO Pose, 800x800) :
+
+1. Rognage et redimensionnement des images : Il supprime les marges inutiles de l'image d'origine en fonction des pixels définis (ex: 100px à gauche et à droite), puis redimensionne la zone restante au format strict de 800x800 pixels.
+2. Recalcul des Bounding Boxes : Il convertit les coordonnées relatives de la boîte globale en pixels réels, applique le décalage mathématique lié au rognage, s'assure que la boîte est toujours visible, puis recalcule les coordonnées relatives (0 à 1) par rapport à la nouvelle dimension de l'image.
+3. Recalcul des Keypoints (YOLO Pose) : Il applique exactement la même logique de décalage spatial aux coordonnées des points clés. Si le rognage amène un point clé en dehors du cadre, ses valeurs sont forcées à 0 0 0 pour indiquer à YOLO qu'il n'est plus visible.
+4. Restructuration et configuration : Il enregistre les nouvelles images et labels dans une arborescence propre et conforme aux standards d'Ultralytics (images/val au lieu de valid). Enfin, il met à jour les chemins dans le fichier data.yaml et supprime les métadonnées liées à Roboflow.
+
+### Conversion du dataset pour YOLO classique (Tiny ou autre)
+
+Afin de disposer du dataset pour entraîner un YOLO classique, il faut exécuter le script [utils/strady/convert_from_pose_to_tiny.py](utils/strady/convert_from_pose_to_tiny.py).
+
+Ce script effectue trois actions concises pour passer de ton dataset Pose au format YOLO classique (façon DeepDarts) :
+
+1. Copie des images : Il transfère directement les images de strady_yolo_pose vers strady_yolo. Il ne fait aucun redimensionnement car les images sont déjà en 800x800.
+2. Re-calcul des annotations (Labels) : Pour chaque fichier .txt, il ignore la bounding box globale existante. Il extrait uniquement les coordonnées x et y du premier point clé (la pointe de la fléchette). Il crée ensuite une nouvelle bounding box de taille fixe (0.025, soit 20x20 pixels) centrée exactement sur cette pointe. Le nouveau label respecte le format standard : classe x_centre y_centre largeur hauteur.
+3. Mise à jour du data.yaml : Il copie ton fichier de configuration en supprimant les paramètres propres à YOLO Pose (kpt_shape et flip_idx). Cela permet à YOLO d'interpréter le dataset comme un simple problème de détection d'objets (YOLO Classique) sans générer d'erreur.
+
+> [!WARNING]
+> Ce script ne peut être exécuté uniquement après l'exécution du script précédent. Il se base strictement sur le dossier `datasets/strady_yolo_pose` pour créer le nouveau dossier.
+
+---
 
 ## Notes sur la Raspberry Pi
 

@@ -10,6 +10,10 @@ datasets/deepdarts/*
 # Autoriser uniquement le fichier .gitkeep pour forcer l'envoi du dossier
 !datasets/deepdarts/.gitkeep
 
+!datasets/strady/
+datasets/strady/*
+!datasets/strady/.gitkeep
+
 # Dégager les .csv (en général il s'agit des labels traduits depuis le .pkl)
 *.csv
 
