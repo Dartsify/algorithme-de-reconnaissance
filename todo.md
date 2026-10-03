@@ -17,4 +17,5 @@
 - [x] Si lancement d'un autre entrainement -> faire gaffe à bien envoyer un max de données vers wandb et de peut-être enregistrer plus de checkpoints pour pouvoir retourner en arrière si le `best.pt` n'est pas en fin de compte le meilleur choix ;
 - [x] Se renseigner pour lancer en parallèle de la suite l'entrainement sur deepdarts_d1 d'un modèle YOLO Pose et non plus Tiny ;
 - [ ] Regarder à RunPod ;
-- [ ] Tester l'annotation dans Roboflow d'un projet pour Keypoints (Pose) et voir si effectivement on peut utiliser les annotations pour entrainer à la fois un YOLO Pose et un YOLO classique (après avoir dégager les valeurs non intéressantes pour le classique).
+- [x] Tester l'annotation dans Roboflow d'un projet pour Keypoints (Pose) et voir si effectivement on peut utiliser les annotations pour entrainer à la fois un YOLO Pose et un YOLO classique (après avoir dégager les valeurs non intéressantes pour le classique).;
+- [ ] Essayer de faire un script qui produit une heatmap avec tous les points annotés, afin de vérifier si on a bien eu des fléchettes dans toutes les zones ;
