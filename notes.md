@@ -7,6 +7,7 @@
 - [`27-sept-2026 (a)`](#27-sept-2026-a)
 - [`27-sept-2026 (b)`](#27-sept-2026-b)
 - [`28-sept-2026`](#28-sept-2026)
+- [`06-oct-2026`](#06-oct-2026)
 
 ## `25-sept-2026`
 
@@ -153,3 +154,13 @@ Même question si on veut tester l'entrainement d'un YOLO Pose -> étant donné 
 L'IA me conseilles de directement annoter pour YOLO Pose et de dégager après à l'aide d'un script les données liées uniquement à Pose si je veux utiliser ce dataset sur un YOLO classique. Encore d'après elle, si on annote sur le dataset brut (sans centrage) via Keypoints, on pourra avec un script simplement transposer les coordonnées de la pointe de la flèche (déjà renseigné lors de l'annotation) et ce sera parfaitement précis. Ensuite, si on veut vraiment avoir une bbox comme dans le dataset d1, on aura qu'à générer une bbox de taille constante centrée en ce point.
 
 -> Dès lors, tout nous mène à annoter via la convention Keypoints plutôt que de la simple Object Detection.
+
+## `06-oct-2026`
+
+Lancement du premier transfer learning. J'ai utilisé la config. [configs/strady_deepdarts_1.yaml](configs/strady_deepdarts_1.yaml). Je le fais donc tourner sur uniquement 1157 images de David (sur 1500), c'est histoire d'avoir déjà un truc à tester. Je n'ai pas activé le freeze de certaines couches et j'ai laissé les mêmes paramètres pour la data augmentation.
+
+Je propose, pour les run suivant de tester :
+
+- La désactivation de la data augmentation ;
+- Le freeze de certaines couches ;
+- Le non transfer des poids pré-établis de la dernière couche (apparemment DeepDarts n'a pas repris les poids du pré-entrainement de la dernière couche).

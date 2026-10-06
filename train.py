@@ -19,7 +19,7 @@ def main():
     settings.update({"wandb": True})
 
     # Chargement du fichier de configuration pour l'entrainement du modèle
-    with open("configs/deepdarts_d1_yolo.yaml", "r") as file: # Choisir le fichier de config. pour l'entrainement !!
+    with open("configs/strady_deepdarts_1.yaml", "r") as file: # Choisir le fichier de config. pour l'entrainement !!
         cfg = yaml.safe_load(file)
 
     # Charger les variables d'environnement depuis le fichier .env
@@ -50,6 +50,7 @@ def main():
         # lr0=cfg["train"]["lr"], # -> Je le dégage car je laisse le modèle gérer lui même le learning rate (il est déjà optimisé pour YOLO26). Si ça va pas je le remettrai avec AdamW comme optimiseur.
         seed=cfg["train"]["seed"],
         patience=cfg["train"]["patience"],
+        freeze=cfg["train"]["freeze"],
 
         # Data aug
         fliplr=cfg["aug"]["flip_lr_prob"],

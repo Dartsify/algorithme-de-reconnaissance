@@ -1,20 +1,9 @@
-# Fichier de configuration pour l'entrainement du modèle YOLOv26 Nano sur le dataset DeepDarts (version d1 ET d2). Il s'agit d'une adaptation du fichier de configuration original de DeepDarts (initialement pour YOLOv4-tiny) pour le framework Ultralytics YOLOv26. Les paramètres d'entrainement, d'augmentation et de modèle sont définis ici.
-# J'ai utilisé cette config pour le premier entrainement.
+# Fichier de configuration pour le transfer learning du modèle YOLOv26 Nano déjà entrainé sur le dataset DeepDarts) sur nos données.
+# J'ai utilisé cette config pour le premier transfer learning.
 
 data:
-  # YOLO a besoin d'un fichier YAML séparé décrivant les chemins train/val et les classes.
-  # Ce path pointe donc vers ce fichier spécifique à Ultralytics.
-  path: "datasets/deepdarts_yolo/data.yaml"
-  dataset_version: "d1 et d2" # Je pense uniquement un tag pour garder une trace de la version du dataset utilisé, ça n'a pas un lien direct avec YOLO. Il devrait être envoyé à wandb.
-
-board:
-  # Données gardées du fichier de config. initial de DeepDarts. Il s'agit des valeurs de différentes dimensions d'une cible standard.
-  r_board: 0.2255
-  r_double: 0.170
-  r_treble: 0.1074
-  r_outer_bull: 0.0159
-  r_inner_bull: 0.00635
-  w_double_treble: 0.01
+  path: "datasets/strady_yolo/data.yaml"
+  dataset_version: "perso - 1157 photos de David"
 
 train:
   seed: 0 # Pour avoir une expérience reproductible -> cependant sur mac j'ai un avertissement que certaines opérations ne sont pas déterministes, donc ça ne garantit pas une reproductibilité parfaite. Donc je coupe pour de meilleures perf. (j'ai ajouté dans train un champ "deterministic=False" pour désactiver la reproductibilité et gagner en vitesse).
@@ -23,12 +12,12 @@ train:
   batch_size: 32 # Pour mon MBP M1 MAX je vais booster le batch_size.
   # batch_size: -1 # YOLO26 va choisir automatiquement le batch_size maximal possible selon la VRAM disponible. Je teste. UPDATE -> MARCHE PAS SUR MAC MAIS QUE SUR LES GPU NVIDIA MACHIN.
   # lr: 0.001 # Je dégage le lr dépassé de DeepDarts pour YOLOv4-tiny. YOLO26 gère le lr automatiquement maintenant. Si ça va pas je choisirai spécifiquement AdamW comme optim. avec un lr.
-  patience: 50 # Si le modèle n'améliore pas sa performance sur la validation pendant 50 epochs, l'entrainement s'arrête.
-  # YOLO26 gère nativement le end-to-end sans NMS.
-  # Le CIoU est activé par défaut -> on dégage donc des paramètres inutiles du fichier original de DeepDarts.
+  patience: 25 # Si le modèle n'améliore pas sa performance sur la validation pendant 25 epochs, l'entrainement s'arrête.
   val: true
-  project: "deepdarts_yolo" # Dossier de sortie pour les runs d'entrainement.
-  name: "deepdarts_yolo_run" # Nom du run en local et précisé également à wandb
+  project: "strady" # Dossier de sortie pour les runs d'entrainement.
+  name: "strady_yolo_run" # Nom du run en local et précisé également à wandb
+
+  freeze: 0
 
 aug:
   # Équivalents YOLO26 des augmentations DeepDarts
@@ -40,6 +29,5 @@ aug:
   perspective: 0.001 # DeepDarts l'ont fait eux même (le warping) via une fonction python spécifique. Nous on va déjà essayer avec l'intégration native de YOLO26. On verra si c'est suffisant. (Ils avaient besoin de ça surtout pour la reconnaissance des points de calibrage de la cibls)
 
 model:
-  # YOLO26 Nano est l'équivalent moderne, beaucoup plus rapide et précis que YOLOv4-tiny
-  weights_path: "yolo26n.pt"
+  weights_path: "runs/detect/strady/deepdarts_d1_yolo_run/weights/best.pt"
   input_size: 800

@@ -10,7 +10,7 @@ from pathlib import Path
 # ---
 dataset_dir = Path("datasets/strady_yolo") # ou strady_yolo
 split = "train" # 'train', 'val' ou 'test'
-img_name = "cam2_060526_162901_jpg.rf.1d7a4c3f82519e4f4116a3ebf2f7bf45" # Nom de l'image SANS l'extension
+img_name = "cam1_020526_124100_jpg.rf.f9ebe85eca465c042976c8fc771fb1ff" # Nom de l'image SANS l'extension
 
 image_path = dataset_dir / "images" / split / f"{img_name}.jpg"
 label_path = dataset_dir / "labels" / split / f"{img_name}.txt"
