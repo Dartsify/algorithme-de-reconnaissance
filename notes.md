@@ -164,3 +164,7 @@ Je propose, pour les run suivant de tester :
 - La désactivation de la data augmentation ;
 - Le freeze de certaines couches ;
 - Le non transfer des poids pré-établis de la dernière couche (apparemment DeepDarts n'a pas repris les poids du pré-entrainement de la dernière couche).
+
+J'ai ensuite lancé un entrainement sans data aug. (mais c'est bizarre, on dirait dans le batch au début qu'il y a quand même une modif de type scale, voir photo).
+
+![alt text](runs/detect/strady/strady_yolo_run/train_batch0.jpg)

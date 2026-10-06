@@ -19,7 +19,7 @@ def main():
     settings.update({"wandb": True})
 
     # Chargement du fichier de configuration pour l'entrainement du modèle
-    with open("configs/strady_deepdarts_1.yaml", "r") as file: # Choisir le fichier de config. pour l'entrainement !!
+    with open("configs/strady_deepdarts_2.yaml", "r") as file: # Choisir le fichier de config. pour l'entrainement !!
         cfg = yaml.safe_load(file)
 
     # Charger les variables d'environnement depuis le fichier .env
@@ -59,6 +59,7 @@ def main():
         translate=cfg["aug"]["jitter_max"],
         mosaic=cfg["aug"]["mosaic"],
         perspective=cfg["aug"]["perspective"], # Ajout de la perspective (que DeepDarts a créé lui même)
+        scale=cfg["aug"]["scale"],
 
         name=cfg["train"]["name"], # Nom du run en local, par défaut "train" incrémenté à chaque run
 
