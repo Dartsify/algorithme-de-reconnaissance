@@ -43,10 +43,14 @@ def charger_modele_yolo(chemin_modele: Path) -> ort.InferenceSession:
         raise FileNotFoundError(f"Modèle YOLO introuvable à : {chemin_modele}")
     
     print(f"[IA] Chargement du modèle YOLO : {chemin_modele.name}...")
-    # 'CPUExecutionProvider' est le plus stable sur Raspberry. 
-    session = ort.InferenceSession(str(chemin_modele), providers=['CPUExecutionProvider'])
+    
+    # Optimisations spécifiques pour le processeur ARM du Raspberry Pi
+    options = ort.SessionOptions()
+    options.intra_op_num_threads = 4  # Limite l'usage à 4 cœurs pour éviter la surcharge
+    options.execution_mode = ort.ExecutionMode.ORT_SEQUENTIAL
+    
+    session = ort.InferenceSession(str(chemin_modele), sess_options=options, providers=['CPUExecutionProvider'])
     return session
-
 
 
 # Prépare les images pour YOLO (Redimensionnement, RGB, Normalisation, Batching).
