@@ -15,7 +15,7 @@ train:
   patience: 20 # Si le modèle n'améliore pas sa performance sur la validation pendant 20 epochs, l'entrainement s'arrête.
   val: true
   project: "strady" # Dossier de sortie pour les runs d'entrainement.
-  name: "strady_yolo_run" # Nom du run en local et précisé également à wandb
+  name: "strady_yolo_run-4" # Nom du run en local et précisé également à wandb
 
   freeze: 10
 

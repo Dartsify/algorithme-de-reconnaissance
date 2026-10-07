@@ -19,7 +19,7 @@ def main():
     settings.update({"wandb": True})
 
     # Chargement du fichier de configuration pour l'entrainement du modèle
-    with open("configs/strady_deepdarts_5.yaml", "r") as file: # Choisir le fichier de config. pour l'entrainement !!
+    with open("configs/strady_deepdarts_6.yaml", "r") as file: # Choisir le fichier de config. pour l'entrainement !!
         cfg = yaml.safe_load(file)
 
     # Charger les variables d'environnement depuis le fichier .env

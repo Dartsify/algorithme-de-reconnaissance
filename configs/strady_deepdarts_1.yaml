@@ -14,7 +14,7 @@ train:
   # lr: 0.001 # Je dégage le lr dépassé de DeepDarts pour YOLOv4-tiny. YOLO26 gère le lr automatiquement maintenant. Si ça va pas je choisirai spécifiquement AdamW comme optim. avec un lr.
   patience: 25 # Si le modèle n'améliore pas sa performance sur la validation pendant 25 epochs, l'entrainement s'arrête.
   val: true
-  project: "strady" # Dossier de sortie pour les runs d'entrainement.
+  project: "strady_yolo" # Dossier de sortie pour les runs d'entrainement. -> me suis trompé quand j'ai lancé l'entrainement
   name: "strady_yolo_run" # Nom du run en local et précisé également à wandb
 
   freeze: 0
