@@ -12,23 +12,23 @@ train:
   batch_size: 32 # Pour mon MBP M1 MAX je vais booster le batch_size.
   # batch_size: -1 # YOLO26 va choisir automatiquement le batch_size maximal possible selon la VRAM disponible. Je teste. UPDATE -> MARCHE PAS SUR MAC MAIS QUE SUR LES GPU NVIDIA MACHIN.
   # lr: 0.001 # Je dégage le lr dépassé de DeepDarts pour YOLOv4-tiny. YOLO26 gère le lr automatiquement maintenant. Si ça va pas je choisirai spécifiquement AdamW comme optim. avec un lr.
-  patience: 25 # Si le modèle n'améliore pas sa performance sur la validation pendant 25 epochs, l'entrainement s'arrête.
+  patience: 20 # Si le modèle n'améliore pas sa performance sur la validation pendant 20 epochs, l'entrainement s'arrête.
   val: true
   project: "strady" # Dossier de sortie pour les runs d'entrainement.
   name: "strady_yolo_run" # Nom du run en local et précisé également à wandb
 
-  freeze: 0
+  freeze: 11
 
 aug:
   # Équivalents YOLO26 des augmentations DeepDarts
-  flip_lr_prob: 0.5 # Probabilité miroir horizontal (fliplr)
-  flip_ud_prob: 0.5 # Probabilité miroir vertical (flipud)
-  rot_step: 36 # Rotation en degrés (degrees)
-  jitter_max: 0.02 # Translation fractionnelle (translate)
+  flip_lr_prob: 0.0 # Probabilité miroir horizontal (fliplr)
+  flip_ud_prob: 0.0 # Probabilité miroir vertical (flipud)
+  rot_step: 0.0 # Rotation en degrés (degrees)
+  jitter_max: 0.0 # Translation fractionnelle (translate)
   mosaic: 0.0 # Désactivé. Par défaut YOLO l'active. Ici je crois comprendre que c'est nul car il va mélanger des parties d'images ensemble, le modèle a besoin de l'image globale.
-  perspective: 0.001 # DeepDarts l'ont fait eux même (le warping) via une fonction python spécifique. Nous on va déjà essayer avec l'intégration native de YOLO26. On verra si c'est suffisant. (Ils avaient besoin de ça surtout pour la reconnaissance des points de calibrage de la cibls)
+  perspective: 0.0 # DeepDarts l'ont fait eux même (le warping) via une fonction python spécifique. Nous on va déjà essayer avec l'intégration native de YOLO26. On verra si c'est suffisant. (Ils avaient besoin de ça surtout pour la reconnaissance des points de calibrage de la cibls)
 
-  scale: 0.5 # Valeur par défaut, rajoutée par après
+  scale: 0.5 # Valeur par défaut
 
 model:
   weights_path: "runs/detect/strady/deepdarts_d1_yolo_run/weights/best.pt"

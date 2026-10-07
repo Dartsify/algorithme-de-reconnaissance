@@ -8,6 +8,7 @@
 - [`27-sept-2026 (b)`](#27-sept-2026-b)
 - [`28-sept-2026`](#28-sept-2026)
 - [`06-oct-2026`](#06-oct-2026)
+- [`07-oct-2026`](#07-oct-2026)
 
 ## `25-sept-2026`
 
@@ -169,3 +170,25 @@ Je propose, pour les run suivant de tester :
 J'ai ensuite lancé un entrainement sans data aug. (mais c'est bizarre, on dirait dans le batch au début qu'il y a quand même une modif de type scale, voir photo).
 
 ![alt text](runs/detect/strady/strady_yolo_run/train_batch0.jpg)
+
+## `07-oct-2026`
+
+Liste des entrainements de transfer learning :
+
+1. [runs/detect/strady_yolo/strady_yolo_run/](runs/detect/strady_yolo/strady_yolo_run/) : 1157 images de David, poids de DeepDarts, data aug. ([configs/strady_deepdarts_1.yaml](configs/strady_deepdarts_1.yaml)) ;
+2. [runs/detect/strady/strady_yolo_run/](runs/detect/strady/strady_yolo_run/) : 1157 images de David, poids de DeepDarts, pas de data aug. (sauf scale) ([configs/strady_deepdarts_2.yaml](configs/strady_deepdarts_2.yaml)) ;
+3. [runs/detect/strady/strady_yolo_run-2/](runs/detect/strady/strady_yolo_run-2/) : 1157 images de David, pas de poids de base, pas de data aug. ([configs/strady_deepdarts_3.yaml](configs/strady_deepdarts_3.yaml)) ;
+4. [runs/detect/strady/strady_yolo_run-3/](runs/detect/strady/strady_yolo_run-3/) : 1157 images de David, poids de DeepDarts, pas de data aug. ([configs/strady_deepdarts_4.yaml](configs/strady_deepdarts_4.yaml)) ;
+
+Pour le moment, l'entrainement 2 a l'air le mieux ! Je me demandais, pourquoi le scale permet des meilleurs résultats ?
+
+> Note de l'ia :
+> L'augmentation scale (qui simule un zoom avant ou arrière aléatoire sur l'image) est particulièrement efficace pour ton projet pour trois raisons précises :
+> Lutte contre le surapprentissage de la taille : Sans aucune augmentation (entraînement 4), le réseau neuronal mémorise la taille exacte (en pixels) de tes fléchettes. Le scale force le modèle à se concentrer sur les caractéristiques visuelles de la fléchette (la pointe, le corps, l'ailette) plutôt que sur un gabarit figé.
+> Gestion de la perspective : Même si ta caméra est fixe, une fléchette plantée au centre de la cible n'aura pas exactement la même taille apparente (ni la même déformation due à la lentille) qu'une fléchette plantée sur un bord extrême. Le scale simule ces légères variations de taille et rend la prédiction des bounding boxes beaucoup plus robuste.
+> Le juste milieu (Sweet spot) : L'entraînement 1 (toutes augmentations activées) modifiait probablement trop les images (rotations, couleurs, mosaïques), ce qui brouillait les repères. L'entraînement 4 (aucune augmentation) causait un surapprentissage immédiat. L'entraînement 2, en n'utilisant que le scale, apporte juste assez de variation pour forcer le modèle à généraliser, sans dénaturer la géométrie de ta cible.
+
+Suite des entrainements :
+
+5. [runs/detect/strady/strady_yolo_run-4/](runs/detect/strady/strady_yolo_run-4/) : 1157 images de David, poids de DeepDarts, pas de data aug. (sauf scale), freeze 10 ([configs/strady_deepdarts_5.yaml](configs/strady_deepdarts_5.yaml)) ;
+6. [runs/detect/strady/strady_yolo_run-5/](runs/detect/strady/strady_yolo_run-5/) : 1157 images de David, poids de DeepDarts, pas de data aug. (sauf scale), freeze 11 ([configs/strady_deepdarts_6.yaml](configs/strady_deepdarts_6.yaml)) ;
