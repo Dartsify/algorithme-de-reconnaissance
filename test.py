@@ -8,17 +8,28 @@ from pathlib import Path
 # Pour plus de sécurité, il faut renseigner le chemin du fichier de configuration ET le chemin des poids
 # PQ ? Car chaque run d'entrainement a le même nom, mais c'est lors du début de l'entrainement que le nom est incrémenté (sur base de )
 
-config_path = "configs/strady_deepdarts_6.yaml" # À modifier
+config_path = "configs/strady_pose_1.yaml" # À modifier
 
 # Chargement du fichier de configuration pour récupérer les infos de l'entrainement du modèle
 with open(config_path, "r") as file:
     cfg = yaml.safe_load(file)
 
 run_name = cfg['train']['name']
-project_dir = cfg['train'].get('project', 'runs/detect/strady')
 
-# Construction dynamique du chemin des poids
-weights_path = Path("runs") / "detect" / Path(project_dir) / run_name / "weights" / "best.pt"
+yolo_type = "pose" if "pose" in run_name else "detect"
+
+if yolo_type == "pose":
+    project_dir = cfg['train'].get('project', 'runs/pose/strady_pose')
+    # Construction dynamique du chemin des poids
+    weights_path = Path("runs") / "pose" / Path(project_dir) / run_name / "weights" / "best.pt"
+    
+    print("YOLO POSE")
+else:
+    project_dir = cfg['train'].get('project', 'runs/detect/strady')
+    # Construction dynamique du chemin des poids
+    weights_path = Path("runs") / "detect" / Path(project_dir) / run_name / "weights" / "best.pt"
+
+    print("YOLO CLASSIQUE")
 
 # Vérification de sécurité avant de lancer le modèle
 if not weights_path.exists():
@@ -29,11 +40,12 @@ print(f"\n[INFO] Poids sélectionnés pour le test : {weights_path}")
 input("Appuyez sur Entrée pour continuer l'évaluation ou faites Ctrl+C pour annuler...")
 
 # Initialiser le run W&B avec le vrai nom du dossier
-wandb.init(project="Strady", name=f"test_{run_name}", job_type="test", tags=["test_set"])
-
-
-# Initialiser le run W&B en spécifiant qu'il s'agit d'un test
-wandb.init(project="Strady", name=f"test_{run_name}", job_type="test", tags=["test_set"])
+wandb.init(
+    project="strady" if yolo_type == "detect" else "strady_pose",
+    name=f"test_{run_name}",
+    job_type="test",
+    tags=["test_set"]
+)
 
 # Charger les meilleurs poids de l'entraînement choisi
 model = YOLO(weights_path)
