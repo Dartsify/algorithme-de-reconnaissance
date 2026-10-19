@@ -17,24 +17,30 @@ def calculer_distance(x1: float, y1: float, x2: float, y2: float) -> float:
 # Retourne uniquement les fléchettes qui sont "nouvelles".
 def isoler_nouvelles_flechettes(anciennes_pointes: list[tuple[float, float]], 
                                 detections_actuelles: list[FlechetteDetectee]) -> list[FlechetteDetectee]:
+    """
+    Associe chaque ancienne fléchette à AU PLUS UNE détection actuelle (la plus proche),
+    pour éviter d'ignorer une nouvelle fléchette plantée très près d'une ancienne.
+    """
+    # On copie la liste pour pouvoir retirer les fléchettes déjà existantes une par une
+    restantes = list(detections_actuelles)
     
-    nouvelles = []
-    
-    for yolo_flechette in detections_actuelles:
-        est_nouvelle = True
+    for anc_x, anc_y in anciennes_pointes:
+        meilleur_index = -1
+        plus_petite_dist = SEUIL_DISTANCE_PX
         
-        # On compare la pointe actuelle avec toutes les anciennes pointes mémorisées
-        for anc_x, anc_y in anciennes_pointes:
+        # On cherche la détection actuelle la plus proche de cette ancienne fléchette
+        for idx, yolo_flechette in enumerate(restantes):
             dist = calculer_distance(yolo_flechette.x_tip, yolo_flechette.y_tip, anc_x, anc_y)
-            if dist < SEUIL_DISTANCE_PX:
-                # C'est une fléchette déjà connue, on l'ignore
-                est_nouvelle = False
-                break
+            if dist < plus_petite_dist:
+                plus_petite_dist = dist
+                meilleur_index = idx
                 
-        if est_nouvelle:
-            nouvelles.append(yolo_flechette)
+        # Si on a trouvé la vieille fléchette correspondante, on la retire des candidats
+        if meilleur_index != -1:
+            restantes.pop(meilleur_index)
             
-    return nouvelles
+    # Toutes les fléchettes qui n'ont pas été associées à une ancienne sont NOUVELLES !
+    return restantes
 
 
 

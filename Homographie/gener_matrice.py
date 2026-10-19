@@ -14,8 +14,16 @@ from pathlib import Path
 
 
 # 1. PARAMÈTRES À CHANGER AVANT CHAQUE TEST
-CAMERA_A_CALIBRER = 1  # Changer pour 2 puis 3 quand fais les autres
-CHEMIN_IMAGE_CAM = "cam1_reference.jpg"  # La photo prise par cette caméra
+import re
+
+CHEMIN_IMAGE_CAM = "cam3_homographie.jpg"  # Change JUSTE le nom de l'image ici !
+
+# Détection automatique du numéro (cherche le chiffre dans le nom du fichier)
+match_cam = re.search(r"cam(\d+)", CHEMIN_IMAGE_CAM, re.IGNORECASE)
+if match_cam:
+    CAMERA_A_CALIBRER = int(match_cam.group(1))
+else:
+    raise ValueError("Le nom de l'image doit contenir 'cam1', 'cam2' ou 'cam3' !")
 
 # Fichier de sortie qui sera lu par pipeline
 DOSSIER_ACTUEL = Path(__file__).resolve().parent

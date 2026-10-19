@@ -8,21 +8,31 @@ FRAME_HEIGHT = 720
 
 
 # Tente d'ouvrir une seule caméra et configure ses paramètres de base.
+import os
+import platform
+
+# Accélère l'ouverture sous Windows
+os.environ["OPENCV_VIDEOIO_MSMF_ENABLE_HW_TRANSFORMS"] = "0"
+
 def ouvrir_une_camera(camera_index: int, num_logique: int) -> tuple[int, cv2.VideoCapture | None]:
-    
-    # Pour un Raspberry Pi (Linux), on utilise par défaut le backend V4L2.
-    # Si test sur Windows -> cv2.CAP_MSMF si besoin.
-    cap = cv2.VideoCapture(camera_index)
+    # Choix automatique du meilleur driver selon l'OS (Windows vs Raspberry Pi Linux)
+    if platform.system() == "Windows":
+        cap = cv2.VideoCapture(camera_index, cv2.CAP_MSMF)
+    else:
+        cap = cv2.VideoCapture(camera_index, cv2.CAP_V4L2)
 
     if cap.isOpened():
+        # CRUCIAL POUR RASPBERRY PI : Forcer le format MJPG pour ne pas saturer les ports USB avec 3 caméras
+        cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'MJPG'))
+        
         # Forcer la résolution
         cap.set(cv2.CAP_PROP_FRAME_WIDTH, FRAME_WIDTH)
         cap.set(cv2.CAP_PROP_FRAME_HEIGHT, FRAME_HEIGHT)
         
-        # Désactiver l'autofocus et l'adaptation automatique de l'exposition.
-        # CRUCIAL : Si l'exposition change quand le joueur retire ses fléchettes, 
-        # la détection de mouvement (qui utilise absdiff) va s'affoler.
-        cap.set(cv2.CAP_PROP_AUTO_EXPOSURE, 0)
+        # Désactiver l'autofocus et l'exposition auto
+        # (Sur Linux V4L2, 1 = Manuel ; sur Windows MSMF, 0 = Manuel)
+        val_expo = 0 if platform.system() == "Windows" else 1
+        cap.set(cv2.CAP_PROP_AUTO_EXPOSURE, val_expo)
         cap.set(cv2.CAP_PROP_AUTOFOCUS, 0)
         
         print(f"[HW] Caméra matérielle {camera_index} ouverte et assignée à l'ID logique {num_logique}.")

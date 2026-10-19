@@ -47,3 +47,18 @@ def verifier_mouvement(ref_gray: np.ndarray, frame_actuelle: np.ndarray, seuil_p
     surface_totale = sum(cv2.contourArea(contour) for contour in contours)
     
     return surface_totale > seuil_surface
+
+
+def verifier_mouvement_3vues(references_gray: dict[int, np.ndarray], frames_actuelles: dict[int, np.ndarray]) -> bool:
+    """Retourne True dès qu'AU MOINS UNE des 3 caméras détecte un mouvement."""
+    for cam_id in references_gray:
+        if verifier_mouvement(references_gray[cam_id], frames_actuelles[cam_id]):
+            return True
+    return False
+
+def actualiser_references(frames_actuelles: dict[int, np.ndarray]) -> dict[int, np.ndarray]:
+    """Met à jour l'image de référence sans reprendre de photo ni afficher de message trompeur."""
+    return {
+        cam_id: preparer_image_mouvement(frame)
+        for cam_id, frame in frames_actuelles.items()
+    }

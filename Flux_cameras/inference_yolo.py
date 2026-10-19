@@ -84,27 +84,78 @@ def pretraiter_images(frames: dict[int, cv2.typing.MatLike], yolo_size: int = 64
     return batch_tensor, camera_ids, taille_origine
 
 
-# Exécute l'inférence YOLO et décode les résultats.
 def analyser_batch_yolo(session: ort.InferenceSession, frames: dict[int, cv2.typing.MatLike], seuil_confiance: float = 0.5) -> dict[int, list[FlechetteDetectee]]:
     
     # 1. Préparation
-    yolo_size = 640 # Vérifie la taille d'entrée de modèle ONNX (généralement 640)
+    yolo_size = 640
     batch_tensor, camera_ids, (largeur_orig, hauteur_orig) = pretraiter_images(frames, yolo_size)
     
-    # Ratios pour remettre les coordonnées de 640x640 vers 1280x720
     ratio_x = largeur_orig / yolo_size
     ratio_y = hauteur_orig / yolo_size
 
     # 2. Inférence ONNX
     input_name = session.get_inputs()[0].name
     outputs = session.run(None, {input_name: batch_tensor})
-    
-    # YOLOv8 renvoie généralement un tenseur de forme (Batch, Features, Anchors).
-    # Ex: (3, 14, 8400) -> 3 images, 8400 prédictions par image, 14 valeurs par prédiction.
-    # Les 14 valeurs sont souvent : [cx, cy, w, h, conf, kpt1_x, kpt1_y, kpt1_conf, kpt2_x, kpt2_y, kpt2_conf, ...]
     predictions = outputs[0] 
     
     resultats_finaux = {cam_id: [] for cam_id in camera_ids}
+
+    # 3. Post-traitement avec NMS (Suppression des doublons)
+    for i, cam_id in enumerate(camera_ids):
+        pred_camera = predictions[i]
+        # Si la forme est (Features, 8400), on transpose en (8400, Features)
+        if pred_camera.shape[0] < pred_camera.shape[1]:
+            pred_camera = np.transpose(pred_camera)
+            
+        nb_colonnes = pred_camera.shape[1]
+        
+        boxes = []
+        confidences = []
+        detections_brutes = []
+
+        for detection in pred_camera:
+            confiance_box = float(detection[4])
+            
+            if confiance_box > seuil_confiance:
+                cx, cy, w, h = detection[0], detection[1], detection[2], detection[3]
+                # Format attendu par NMSBoxes : [x_haut_gauche, y_haut_gauche, largeur, hauteur]
+                x_min = float(cx - w / 2)
+                y_min = float(cy - h / 2)
+                
+                boxes.append([x_min, y_min, float(w), float(h)])
+                confidences.append(confiance_box)
+                detections_brutes.append(detection)
+
+        # Application du NMS pour ne garder qu'UNE seule boîte par fléchette réelle
+        indices_retenus = cv2.dnn.NMSBoxes(boxes, confidences, seuil_confiance, nms_threshold=0.45)
+
+        if len(indices_retenus) > 0:
+            for idx in indices_retenus.flatten():
+                det = detections_brutes[idx]
+                conf_box = float(det[4])
+                
+                # Adaptation automatique selon que YOLO exporte (x, y) ou (x, y, visibilité)
+                if nb_colonnes >= 11:
+                    x_tip_yolo, y_tip_yolo, conf_tip = det[5], det[6], det[7]
+                    x_flight_yolo, y_flight_yolo, conf_flight = det[8], det[9], det[10]
+                elif nb_colonnes == 9:
+                    x_tip_yolo, y_tip_yolo, conf_tip = det[5], det[6], conf_box
+                    x_flight_yolo, y_flight_yolo, conf_flight = det[7], det[8], conf_box
+                else:
+                    raise ValueError(f"Format de sortie YOLO inattendu ({nb_colonnes} colonnes).")
+
+                flechette = FlechetteDetectee(
+                    confiance_globale=conf_box,
+                    x_tip=float(x_tip_yolo * ratio_x),
+                    y_tip=float(y_tip_yolo * ratio_y),
+                    confiance_tip=float(conf_tip),
+                    x_flight=float(x_flight_yolo * ratio_x),
+                    y_flight=float(y_flight_yolo * ratio_y),
+                    confiance_flight=float(conf_flight)
+                )
+                resultats_finaux[cam_id].append(flechette)
+
+    return resultats_finaux
 
     # 3. Post-traitement (À ADAPTER SELON LA SORTIE EXACTE DU MODÈLE)
     for i, cam_id in enumerate(camera_ids):
