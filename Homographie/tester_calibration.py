@@ -6,7 +6,11 @@ import sys
 # On importe la fonction de lecture depuis ton dossier Flux_cameras
 RACINE = Path(__file__).resolve().parent.parent
 sys.path.append(str(RACINE / "Flux_cameras"))
+<<<<<<< Updated upstream
 from homographie import charger_homographies
+=======
+from homographie import charger_homographies #type: ignore
+>>>>>>> Stashed changes
 
 DOSSIER_HOMO = Path(__file__).resolve().parent
 FICHIER_MATRICES = DOSSIER_HOMO / "matrice_homographie.txt"
