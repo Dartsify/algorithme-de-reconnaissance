@@ -209,7 +209,7 @@ J'ai lancé deux YOLO Pose dans un projet wandb strady_pose :
 J'ai lancé deux entrainements finaux dans un projet wandb strady_final :
 
 - [runs/pose/strady_final/strady_yolo_pose_run-1/](runs/pose/strady_final/strady_yolo_pose_run-1/) : Yolo Pose sans data aug. (juste scale 0.5) avec toutes nos photos (david + perso.) MAIS pas les photos de cible sans flèches ([configs/strady_pose_final_1.yaml](configs/strady_pose_final_1.yaml)) ;
-- [runs/pose/strady_final/strady_yolo_pose_run-2/](runs/pose/strady_final/strady_yolo_pose_run-2/) : Yolo Pose sans data aug. (juste scale 0.5) avec toutes nos photos (david + perso.) ET 99 photos de cible sans flèches ([configs/strady_pose_final_2.yaml](configs/strady_pose_final_2.yaml)).
+- [ANNULÉ] [runs/pose/strady_final/strady_yolo_pose_run-2/](runs/pose/strady_final/strady_yolo_pose_run-2/) : Yolo Pose sans data aug. (juste scale 0.5) avec toutes nos photos (david + perso.) ET 99 photos de cible sans flèches ([configs/strady_pose_final_2.yaml](configs/strady_pose_final_2.yaml)).
 
 -> Conclusion : ???
 
@@ -220,3 +220,5 @@ Donc je mets à jour ce que je veux tester :
 - Activation quand même de mosaic (apparement ça peut aider à généraliser) ;
 - Diminution du scale ? ;
 - Test des images non resize avec le letterbox automatique de Yolo ;
+
+-> Mon redim. en carré est vachement meilleur, je sais pas comment ça se fait ??

@@ -19,7 +19,7 @@ def main():
     settings.update({"wandb": True})
 
     # Chargement du fichier de configuration pour l'entrainement du modèle
-    with open("configs/strady_pose_final_2.yaml", "r") as file: # Choisir le fichier de config. pour l'entrainement !!
+    with open("configs/strady_pose_final_3.yaml", "r") as file: # Choisir le fichier de config. pour l'entrainement !!
         cfg = yaml.safe_load(file)
 
     # Charger les variables d'environnement depuis le fichier .env
@@ -60,6 +60,7 @@ def main():
         mosaic=cfg["aug"]["mosaic"],
         perspective=cfg["aug"]["perspective"], # Ajout de la perspective (que DeepDarts a créé lui même)
         scale=cfg["aug"]["scale"],
+        close_mosaic=cfg["aug"]["close_mosaic"],
 
         name=cfg["train"]["name"], # Nom du run en local, par défaut "train" incrémenté à chaque run
 

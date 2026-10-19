@@ -8,7 +8,7 @@ from pathlib import Path
 # Pour plus de sécurité, il faut renseigner le chemin du fichier de configuration ET le chemin des poids
 # PQ ? Car chaque run d'entrainement a le même nom, mais c'est lors du début de l'entrainement que le nom est incrémenté (sur base de )
 
-config_path = "configs/strady_pose_2.yaml" # À modifier
+config_path = "configs/strady_pose_final_3.yaml" # À modifier
 
 # Chargement du fichier de configuration pour récupérer les infos de l'entrainement du modèle
 with open(config_path, "r") as file:
@@ -41,7 +41,8 @@ input("Appuyez sur Entrée pour continuer l'évaluation ou faites Ctrl+C pour an
 
 # Initialiser le run W&B avec le vrai nom du dossier
 wandb.init(
-    project="strady" if yolo_type == "detect" else "strady_pose",
+    # project="strady" if yolo_type == "detect" else "strady_pose",
+    project="strady_final",
     name=f"test_{run_name}",
     job_type="test",
     tags=["test_set"]
@@ -51,7 +52,7 @@ wandb.init(
 model = YOLO(weights_path)
 
 # Lancer l'évaluation explicitement sur l'ensemble de test
-metrics = model.val(data=cfg['data']['path'], split="test", name="test_results")
+metrics = model.val(data=cfg['data']['path'], split="test", name="test_results", save_txt=True)
 
 # wandb.log(metrics.results_dict) # Forcer l'envoi des données vers wandb
 
