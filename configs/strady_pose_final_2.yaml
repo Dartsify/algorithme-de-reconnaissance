@@ -1,0 +1,25 @@
+data:
+  path: "datasets/strady_yolo_pose/data.yaml"
+
+train:
+  seed: 0
+  epochs: 300
+  batch_size: 32
+  patience: 25
+  val: true
+  project: "strady_final"
+  name: "strady_yolo_pose_run-2"
+  freeze: 0
+
+aug:
+  flip_lr_prob: 0.0
+  flip_ud_prob: 0.0
+  rot_step: 0
+  jitter_max: 0.0
+  mosaic: 0.0
+  perspective: 0.0
+  scale: 0.5
+
+model:
+  weights_path: "yolo26n-pose.pt"
+  input_size: 800

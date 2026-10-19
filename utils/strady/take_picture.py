@@ -5,6 +5,21 @@ import os
 import time
 from datetime import datetime
 
+cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
+
+# Forcer le MJPG permet souvent de débloquer le 720p/1080p à haut framerate sur Windows
+cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'MJPG'))
+cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+
+# Toujours vérifier que la caméra a bien accepté la résolution
+actual_w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+actual_h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+print(f"Résolution active : {actual_w}x{actual_h}")
+
+if (actual_w, actual_h) != (1280, 720):
+    raise RuntimeError("Attention : La caméra n'est pas en 1280x720 !")
+
 # Configuration
 base_dir = "datasets/strady_raw"
 camera_indices = [0, 1, 2]

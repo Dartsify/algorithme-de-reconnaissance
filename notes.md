@@ -9,6 +9,8 @@
 - [`28-sept-2026`](#28-sept-2026)
 - [`06-oct-2026`](#06-oct-2026)
 - [`07-oct-2026`](#07-oct-2026)
+- [`17-oct-2026`](#17-oct-2026)
+- [`19-oct-2026`](#19-oct-2026)
 
 ## `25-sept-2026`
 
@@ -192,3 +194,23 @@ Suite des entrainements :
 
 5. [runs/detect/strady/strady_yolo_run-4/](runs/detect/strady/strady_yolo_run-4/) : 1157 images de David, poids de DeepDarts, pas de data aug. (sauf scale), freeze 10 ([configs/strady_deepdarts_5.yaml](configs/strady_deepdarts_5.yaml)) ;
 6. [runs/detect/strady/strady_yolo_run-5/](runs/detect/strady/strady_yolo_run-5/) : 1157 images de David, poids de DeepDarts, pas de data aug. (sauf scale), freeze 11 ([configs/strady_deepdarts_6.yaml](configs/strady_deepdarts_6.yaml)) ;
+
+## `17-oct-2026`
+
+J'ai lancé deux YOLO Pose dans un projet wandb strady_pose :
+
+- [runs/pose/strady_pose/strady_yolo_pose_run-1/](runs/pose/strady_pose/strady_yolo_pose_run-1/) : Yolo Pose avec data aug. avec toutes nos photos (david + perso.) MAIS pas les photos de cible sans flèches ([configs/strady_pose_1.yaml](configs/strady_pose_1.yaml)) ;
+- [runs/pose/strady_pose/strady_yolo_pose_run-2/](runs/pose/strady_pose/strady_yolo_pose_run-2/) : Yolo Pose sans data aug. (juste scale 0.5) avec toutes nos photos (david + perso.) MAIS pas les photos de cible sans flèches ([configs/strady_pose_2.yaml](configs/strady_pose_2.yaml)).
+
+-> Conclusion : celui sans data aug. est meilleure lors du test (sur des images jamais vues).
+
+## `19-oct-2026`
+
+J'ai lancé deux entrainements finaux dans un projet wandb strady_final :
+
+- [runs/pose/strady_final/strady_yolo_pose_run-1/](runs/pose/strady_final/strady_yolo_pose_run-1/) : Yolo Pose sans data aug. (juste scale 0.5) avec toutes nos photos (david + perso.) MAIS pas les photos de cible sans flèches ([configs/strady_pose_final_1.yaml](configs/strady_pose_final_1.yaml)) ;
+- [runs/pose/strady_final/strady_yolo_pose_run-2/](runs/pose/strady_final/strady_yolo_pose_run-2/) : Yolo Pose sans data aug. (juste scale 0.5) avec toutes nos photos (david + perso.) ET 99 photos de cible sans flèches ([configs/strady_pose_final_2.yaml](configs/strady_pose_final_2.yaml)).
+
+-> Conclusion : ???
+
+Après discussion avec Argon, il me dit aussi que resize les images en 800x800 c'est mieux si on ajoute des bandes grises. Pour le cas du Dataset DeepDarts (donc Yolo Tiny) on peut pas faire ça, mais pour le Yolo Pose je vais essayer de faire ça et voir si l'entrainement aboutit à de meilleurs résultats. Je vais juste crop les images mais laisser Yolo les resize comme il veut avec ses bandes grises.
