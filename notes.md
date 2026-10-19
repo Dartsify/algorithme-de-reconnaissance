@@ -214,3 +214,9 @@ J'ai lancé deux entrainements finaux dans un projet wandb strady_final :
 -> Conclusion : ???
 
 Après discussion avec Argon, il me dit aussi que resize les images en 800x800 c'est mieux si on ajoute des bandes grises. Pour le cas du Dataset DeepDarts (donc Yolo Tiny) on peut pas faire ça, mais pour le Yolo Pose je vais essayer de faire ça et voir si l'entrainement aboutit à de meilleurs résultats. Je vais juste crop les images mais laisser Yolo les resize comme il veut avec ses bandes grises.
+
+Donc je mets à jour ce que je veux tester :
+
+- Activation quand même de mosaic (apparement ça peut aider à généraliser) ;
+- Diminution du scale ? ;
+- Test des images non resize avec le letterbox automatique de Yolo ;
