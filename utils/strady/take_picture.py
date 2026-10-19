@@ -7,6 +7,8 @@ from datetime import datetime
 
 # Configuration
 base_dir = "datasets/strady_raw"
+image_width = 1280
+image_height = 720
 # Mapping index OpenCV -> numéro physique de la caméra.
 # Vérifier les index sur cet ordinateur : ils peuvent varier selon le branchement.
 camera_mapping = {
@@ -38,6 +40,9 @@ for cam_idx, camera_number in camera_mapping.items():
     if not cap.isOpened():
         print(f"[ERREUR] Impossible d'ouvrir la caméra {camera_number} (index OpenCV {cam_idx}).")
         continue
+
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH, image_width)
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, image_height)
         
     # Laisser l'exposition s'ajuster
     time.sleep(1.0)
@@ -50,10 +55,21 @@ for cam_idx, camera_number in camera_mapping.items():
     ret, frame = cap.read()
     
     if ret:
+        capture_height, capture_width = frame.shape[:2]
+        if (capture_width, capture_height) != (image_width, image_height):
+            print(
+                f"[AVERTISSEMENT] La caméra {camera_number} fournit "
+                f"{capture_width}x{capture_height}; redimensionnement vers "
+                f"{image_width}x{image_height} (sans gain de détails)."
+            )
+            frame = cv2.resize(frame, (image_width, image_height), interpolation=cv2.INTER_CUBIC)
+
         filename = f"cam{camera_number}_{timestamp}.jpg"
         filepath = os.path.join(output_dir, filename)
-        cv2.imwrite(filepath, frame)
-        print(f"[SUCCÈS] Sauvegardé : {filepath}")
+        if cv2.imwrite(filepath, frame):
+            print(f"[SUCCÈS] Sauvegardé en {image_width}x{image_height} : {filepath}")
+        else:
+            print(f"[ERREUR] Impossible d'enregistrer l'image : {filepath}")
     else:
         print(f"[ERREUR] Échec de la capture sur la caméra {camera_number} (index OpenCV {cam_idx}).")
         
