@@ -1,0 +1,5 @@
+À ma connaissance, les deux ont été entrainés sur les images cropped and resized mais :
+ - Le 1 n'avait pas d'images de cible vide ;
+ - Le 3 avait des images de cible vide.
+
+Je n'ai pas mis le fichier lié au run 3 qui semble clairement moins bon (celui entrainé en laissant YOLO resize les images).

@@ -16,8 +16,6 @@ CHEMIN_MODELE_DEFAUT = DOSSIER_MODELS / "darts_yolo.onnx"
 DOSSIER_MODELS.mkdir(parents=True, exist_ok=True)
 
 
-
-
 # --- STRUCTURES DE DONNÉES ---
 
 # Représente une fléchette trouvée par YOLO sur une caméra.
@@ -31,8 +29,6 @@ class FlechetteDetectee:
     x_flight: float
     y_flight: float
     confiance_flight: float #tip et flight dans annotation yolo
-
-
 
 
 # --- FONCTIONS PRINCIPALES ---
@@ -55,43 +51,52 @@ def charger_modele_yolo(chemin_modele: Path) -> ort.InferenceSession:
 
 # Prépare les images pour YOLO (Redimensionnement, RGB, Normalisation, Batching).
 # Retourne le tenseur, l'ordre des caméras, et la taille d'origine pour la remise à l'échelle.
+# --- CONSTANTES DE ROGNAGE (identiques au script de test) ---
+CROP_TOP = 0
+CROP_BOTTOM = 0
+CROP_LEFT = 150
+CROP_RIGHT = 150
+# L'homographie est faite sur du 1280x720 et yolo annalyse en 800x800 donc on rogne 150px de chaque côté pour garder le centre de l'image
+# puis on aura un post-traitement pour remettre à l'échelle les coordonnées de la fléchette sur l'image d'origine (1280x720)
+
 def pretraiter_images(frames: dict[int, cv2.typing.MatLike], yolo_size: int = 640) -> tuple[np.ndarray, list[int], tuple[int, int]]:
-    
     input_batch = []
     camera_ids = list(frames.keys())
-    taille_origine = None
+    taille_cropped = None
 
     for cam_id in camera_ids:
         img = frames[cam_id]
-        if taille_origine is None:
-            taille_origine = (img.shape[1], img.shape[0]) # (Largeur, Hauteur)
+        h_orig, w_orig = img.shape[:2]
 
-        # 1. YOLO veut généralement des images carrées (ex: 640x640)
-        img_resized = cv2.resize(img, (yolo_size, yolo_size), interpolation=cv2.INTER_LINEAR)
+        # 1. Rognage identique au script de préparation
+        cropped_img = img[CROP_TOP : h_orig - CROP_BOTTOM, CROP_LEFT : w_orig - CROP_RIGHT]
+
+        if taille_cropped is None:
+            # On mémorise la taille de l'image APRÈS rognage (ex: 980x720 au lieu de 1280x720)
+            taille_cropped = (cropped_img.shape[1], cropped_img.shape[0])
+
+        # 2. Redimensionnement pour YOLO (640x640 ou 800x800 selon export ONNX)
+        img_resized = cv2.resize(cropped_img, (yolo_size, yolo_size), interpolation=cv2.INTER_LINEAR)
         
-        # 2. Convertir de BGR (OpenCV) à RGB (YOLO)
+        # 3. BGR -> RGB et Normalisation
         img_rgb = cv2.cvtColor(img_resized, cv2.COLOR_BGR2RGB)
-        
-        # 3. Normaliser les pixels entre 0.0 et 1.0 (YOLO n'utilise pas la moyenne/écart-type d'ImageNet)
         img_normalized = img_rgb.astype(np.float32) / 255.0
-        
-        # 4. Transposer pour ONNX : (Hauteur, Largeur, Canaux) -> (Canaux, Hauteur, Largeur)
         img_transposed = np.transpose(img_normalized, (2, 0, 1))
         input_batch.append(img_transposed)
 
-    # Empiler pour créer le batch de forme (3, 3, 640, 640)
     batch_tensor = np.array(input_batch, dtype=np.float32)
-    return batch_tensor, camera_ids, taille_origine
+    return batch_tensor, camera_ids, taille_cropped #On rogne 150px de chaque côté (il reste 980x720), puis on redimensionne en 800x800 pour YOLO.
 
 
 def analyser_batch_yolo(session: ort.InferenceSession, frames: dict[int, cv2.typing.MatLike], seuil_confiance: float = 0.5) -> dict[int, list[FlechetteDetectee]]:
     
-    # 1. Préparation
-    yolo_size = 640
-    batch_tensor, camera_ids, (largeur_orig, hauteur_orig) = pretraiter_images(frames, yolo_size)
+    # 1. Préparation (récupère la largeur et hauteur de la zone rognée)
+    yolo_size = 800 # Mettre 800 si modèle ONNX a été exporté en imgsz=800
+    batch_tensor, camera_ids, (largeur_crop, hauteur_crop) = pretraiter_images(frames, yolo_size)
     
-    ratio_x = largeur_orig / yolo_size
-    ratio_y = hauteur_orig / yolo_size
+    # Le ratio s'applique sur la zone rognée, pas sur l'image complète
+    ratio_x = largeur_crop / yolo_size
+    ratio_y = hauteur_crop / yolo_size
 
     # 2. Inférence ONNX
     input_name = session.get_inputs()[0].name
@@ -144,18 +149,21 @@ def analyser_batch_yolo(session: ort.InferenceSession, frames: dict[int, cv2.typ
                 else:
                     raise ValueError(f"Format de sortie YOLO inattendu ({nb_colonnes} colonnes).")
 
+                # On remet à l'échelle de la zone rognée, puis on ajoute l'offset du crop
+                # pour retomber sur les vraies coordonnées de l'image 1280x720
                 flechette = FlechetteDetectee(
                     confiance_globale=conf_box,
-                    x_tip=float(x_tip_yolo * ratio_x),
-                    y_tip=float(y_tip_yolo * ratio_y),
+                    x_tip=float(x_tip_yolo * ratio_x + CROP_LEFT),
+                    y_tip=float(y_tip_yolo * ratio_y + CROP_TOP),
                     confiance_tip=float(conf_tip),
-                    x_flight=float(x_flight_yolo * ratio_x),
-                    y_flight=float(y_flight_yolo * ratio_y),
+                    x_flight=float(x_flight_yolo * ratio_x + CROP_LEFT),
+                    y_flight=float(y_flight_yolo * ratio_y + CROP_TOP),
                     confiance_flight=float(conf_flight)
                 )
                 resultats_finaux[cam_id].append(flechette)
 
     return resultats_finaux
+
 
     # 3. Post-traitement (À ADAPTER SELON LA SORTIE EXACTE DU MODÈLE)
     for i, cam_id in enumerate(camera_ids):
