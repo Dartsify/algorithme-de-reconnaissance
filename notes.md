@@ -11,6 +11,7 @@
 - [`07-oct-2026`](#07-oct-2026)
 - [`17-oct-2026`](#17-oct-2026)
 - [`19-oct-2026`](#19-oct-2026)
+- [`23-oct-2026`](#23-oct-2026)
 
 ## `25-sept-2026`
 
@@ -222,3 +223,48 @@ Donc je mets à jour ce que je veux tester :
 - Test des images non resize avec le letterbox automatique de Yolo ;
 
 -> Mon redim. en carré est vachement meilleur, je sais pas comment ça se fait ??
+
+## `23-oct-2026`
+
+J'avais oublié de décrire les 3 runs exécutés le 19 octobre 2026 :
+
+- [runs/pose/strady_final/strady_yolo_pose_run-1/](runs/pose/strady_final/strady_yolo_pose_run-1/) : Yolo Pose sans data aug. (juste scale 0.5) avec toutes nos photos MAIS pas les photos de cible sans flèches ([configs/strady_pose_final_1.yaml](configs/strady_pose_final_1.yaml)) ;
+- [runs/pose/strady_final/strady_yolo_pose_run-2/](runs/pose/strady_final/strady_yolo_pose_run-2/) : Yolo Pose sans data aug. (juste scale 0.5) avec toutes nos photos MAIS pas les photos de cible sans flèches ([configs/strady_pose_final_2.yaml](configs/strady_pose_final_2.yaml)) ET en laissant YOLO resize lui même les images (il fait du letterbox, donc il resize et conserve le ratio de l'image en mettant des bandes grises au dessus et en dessous de l'image) ;
+- [runs/pose/strady_final/strady_yolo_pose_run-3/](runs/pose/strady_final/strady_yolo_pose_run-3/) : Yolo Pose sans data aug. (juste scale 0.5) avec toutes nos photos ET les photos de cible sans flèches ([configs/strady_pose_final_3.yaml](configs/strady_pose_final_3.yaml)) (tout en continuant de resize et crop les images commme on le fait depuis le début) ;
+
+-> Conclusion : le run 1 et le run 3 semblent être les plus intéressants. Bizarrement, le run 2 (je confirme j'ai bien testé sur les images du même type, cad juste cropped et pas resized) semble moins bon. Le run 3 semblait être moins bon (j'avais surtout comparé les matrices de confusion), mais en fin de compte il est meilleure sur certaines métriques...
+
+<details>
+    <summary>-> Résumé de l'IA sur la comparaison des deux modèles</summary>
+
+> ([lien vers la discussion Gemini](https://share.gemini.google/MIpu4GtcSzcw))
+>
+> Analyse comparative : run-1 vs run-3 pour la reconnaissance de fléchettes
+>
+> 1.  Détection de l'objet (Bounding Box - B)
+>
+>     Cette étape concerne la capacité du modèle à repérer globalement la fléchette sur la cible.
+>
+>     ⚬ Le run-1 est le plus performant pour la détection pure.
+>
+>     ⚬ Sa matrice de confusion montre 479 vrais positifs (fléchettes correctement identifiées) contre 476 pour le run-3.
+>     ⚬ Il génère moins de faux positifs (27 contre 37) et moins de faux négatifs (6 contre 9).
+>     ⚬ Les graphiques confirment une métrique mAP50-95(B) et un recall(B) légèrement supérieurs pour le run-1.
+>
+> 2.  Estimation de la Pose (Keypoints - P)
+>
+>     Cette étape évalue la précision du placement des points clés (essentiel pour localiser exactement la pointe de la fléchette et l'empennage).
+>
+>     ⚬ Le run-3 domine largement sur l'estimation de la pose.
+>
+>     ⚬ La métrique la plus stricte, le mAP50-95(P), montre un écart majeur en faveur du run-3 par rapport au run-1.
+>     ⚬ Le recall(P) et la precision(P) sont également nettement supérieurs pour le run-3. Le modèle place les points clés avec beaucoup plus de certitude et de justesse.
+>     ⚬ Le score de fitness global (qui combine les métriques de détection et de pose) est remporté par le run-3, tiré vers le haut par ses excellents résultats sur la pose.
+>
+> Recommandation pour le système de score
+>
+> Pour un projet de fléchettes automatisé, la localisation exacte de la pointe (Pose) est beaucoup plus critique que la simple détection de la boîte englobante (Box). Une boîte englobante parfaite mais un point clé décalé de quelques millimètres entraînera une erreur de score (ex: compter un triple 20 au lieu d'un simple 20).
+>
+> Le run-3 est le meilleur candidat. Bien qu'il "rate" ou hallucine quelques boîtes de plus que le run-1 (différence marginale de quelques unités sur près de 500 inférences), sa capacité à positionner précisément les points clés de la fléchette est significativement supérieure, ce qui garantira un calcul de score beaucoup plus fiable.
+
+</details>
