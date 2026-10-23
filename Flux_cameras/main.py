@@ -12,14 +12,14 @@ from envoi_backend import envoyer_point_au_backend
 # CONFIGURATION DES CHEMINS 
 DOSSIER_ACTUEL = Path(__file__).resolve().parent
 RACINE_PROJET = DOSSIER_ACTUEL.parent
-CHEMIN_MODELE = RACINE_PROJET / "models" / "darts_yolo.onnx"
+CHEMIN_MODELE = RACINE_PROJET / "models" / "best_1.pt"  # À ajuster selon le modèle exporté (ONNX ou PyTorch)
 CHEMIN_CALIBRATION = RACINE_PROJET / "Homographie" / "matrice_homographie"
 
 # CONSTANTES DE TEMPS 
 CAPTURE_DELAY_SECONDS = 0.5    # Temps de stabilisation après détection de mouvement
 CAPTURE_COOLDOWN_SECONDS = 1.0 # Temps mort après une analyse
 
-MODE_DEBUG = True # À passer sur False en production !
+MODE_DEBUG = True # À passer sur False en production 
 DOSSIER_DEBUG = DOSSIER_ACTUEL / "debug_images"
 DOSSIER_DEBUG.mkdir(exist_ok=True)
 

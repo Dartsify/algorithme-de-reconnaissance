@@ -5,15 +5,23 @@ from dataclasses import dataclass
 from pathlib import Path
 
 
-#ATTENTION, le score de confiance sera basé sur tout ce que YOLO nous donne comme confiance, il faudra un max d'infos de YOLO
-
-# Remonte d'un cran (..) pour sortir de Flux_caméras et entrer dans models/
 RACINE_PROJET = Path(__file__).resolve().parent.parent
 DOSSIER_MODELS = RACINE_PROJET / "models"
 CHEMIN_MODELE_DEFAUT = DOSSIER_MODELS / "darts_yolo.onnx"
 
-# On s'assure que le dossier existe déjà
 DOSSIER_MODELS.mkdir(parents=True, exist_ok=True)
+
+# --- CONSTANTES DE ROGNAGE (identiques à la préparation du dataset) ---
+# L'homographie est faite sur du 1280x720 : on rogne 150 px de chaque côté (il reste 980x720),
+# on étire en 800x800 comme les images d'entraînement, puis on remet les coordonnées
+# sur l'image d'origine 1280x720 en fin de traitement.
+CROP_TOP = 0
+CROP_BOTTOM = 0
+CROP_LEFT = 150
+CROP_RIGHT = 150
+
+TAILLE_YOLO_DEFAUT = 800      # utilisée seulement si l'ONNX a une taille d'entrée dynamique
+NMS_IOU = 0.45                # utilisé seulement pour les exports avec NMS externe (end2end=False)
 
 
 # --- STRUCTURES DE DONNÉES ---
@@ -28,182 +36,159 @@ class FlechetteDetectee:
     confiance_tip: float
     x_flight: float
     y_flight: float
-    confiance_flight: float #tip et flight dans annotation yolo
+    confiance_flight: float
 
 
 # --- FONCTIONS PRINCIPALES ---
 
 def charger_modele_yolo(chemin_modele: Path) -> ort.InferenceSession:
-    
+
     if not chemin_modele.exists():
         raise FileNotFoundError(f"Modèle YOLO introuvable à : {chemin_modele}")
-    
+
     print(f"[IA] Chargement du modèle YOLO : {chemin_modele.name}...")
-    
+
     # Optimisations spécifiques pour le processeur ARM du Raspberry Pi
     options = ort.SessionOptions()
-    options.intra_op_num_threads = 4  # Limite l'usage à 4 cœurs pour éviter la surcharge
+    options.intra_op_num_threads = 4
     options.execution_mode = ort.ExecutionMode.ORT_SEQUENTIAL
-    
+
     session = ort.InferenceSession(str(chemin_modele), sess_options=options, providers=['CPUExecutionProvider'])
+    print(f"[IA] Entrée : {session.get_inputs()[0].shape} | Sortie : {session.get_outputs()[0].shape}")
     return session
 
 
-# Prépare les images pour YOLO (Redimensionnement, RGB, Normalisation, Batching).
-# Retourne le tenseur, l'ordre des caméras, et la taille d'origine pour la remise à l'échelle.
-# --- CONSTANTES DE ROGNAGE (identiques au script de test) ---
-CROP_TOP = 0
-CROP_BOTTOM = 0
-CROP_LEFT = 150
-CROP_RIGHT = 150
-# L'homographie est faite sur du 1280x720 et yolo annalyse en 800x800 donc on rogne 150px de chaque côté pour garder le centre de l'image
-# puis on aura un post-traitement pour remettre à l'échelle les coordonnées de la fléchette sur l'image d'origine (1280x720)
+def _taille_entree(session: ort.InferenceSession) -> int:
+    """Lit la taille d'entrée (carrée) directement dans le modèle ONNX."""
+    taille = session.get_inputs()[0].shape[2]
+    return taille if isinstance(taille, int) else TAILLE_YOLO_DEFAUT
 
-def pretraiter_images(frames: dict[int, cv2.typing.MatLike], yolo_size: int = 640) -> tuple[np.ndarray, list[int], tuple[int, int]]:
-    input_batch = []
+
+# Prépare les images pour YOLO (rognage, étirement en carré, RGB, normalisation, batching).
+# Retourne le tenseur, l'ordre des caméras et, pour chaque caméra, les ratios (x, y)
+# permettant de revenir de l'espace YOLO (800x800) à la zone rognée (980x720).
+def pretraiter_images(frames: dict[int, cv2.typing.MatLike], taille: int = TAILLE_YOLO_DEFAUT
+                      ) -> tuple[np.ndarray, list[int], dict[int, tuple[float, float]]]:
     camera_ids = list(frames.keys())
-    taille_cropped = None
+    tenseurs = []
+    ratios = {}
 
     for cam_id in camera_ids:
         img = frames[cam_id]
         h_orig, w_orig = img.shape[:2]
 
-        # 1. Rognage identique au script de préparation
-        cropped_img = img[CROP_TOP : h_orig - CROP_BOTTOM, CROP_LEFT : w_orig - CROP_RIGHT]
+        rogne = img[CROP_TOP: h_orig - CROP_BOTTOM, CROP_LEFT: w_orig - CROP_RIGHT]
+        h_crop, w_crop = rogne.shape[:2]
+        ratios[cam_id] = (w_crop / taille, h_crop / taille)
 
-        if taille_cropped is None:
-            # On mémorise la taille de l'image APRÈS rognage (ex: 980x720 au lieu de 1280x720)
-            taille_cropped = (cropped_img.shape[1], cropped_img.shape[0])
+        redim = cv2.resize(rogne, (taille, taille), interpolation=cv2.INTER_LINEAR)
+        rgb = cv2.cvtColor(redim, cv2.COLOR_BGR2RGB)
+        tenseurs.append(np.transpose(rgb.astype(np.float32) / 255.0, (2, 0, 1)))
 
-        # 2. Redimensionnement pour YOLO (640x640 ou 800x800 selon export ONNX)
-        img_resized = cv2.resize(cropped_img, (yolo_size, yolo_size), interpolation=cv2.INTER_LINEAR)
-        
-        # 3. BGR -> RGB et Normalisation
-        img_rgb = cv2.cvtColor(img_resized, cv2.COLOR_BGR2RGB)
-        img_normalized = img_rgb.astype(np.float32) / 255.0
-        img_transposed = np.transpose(img_normalized, (2, 0, 1))
-        input_batch.append(img_transposed)
-
-    batch_tensor = np.array(input_batch, dtype=np.float32)
-    return batch_tensor, camera_ids, taille_cropped #On rogne 150px de chaque côté (il reste 980x720), puis on redimensionne en 800x800 pour YOLO.
+    batch_tensor = np.ascontiguousarray(np.stack(tenseurs), dtype=np.float32)
+    return batch_tensor, camera_ids, ratios
 
 
-def analyser_batch_yolo(session: ort.InferenceSession, frames: dict[int, cv2.typing.MatLike], seuil_confiance: float = 0.5) -> dict[int, list[FlechetteDetectee]]:
-    
-    # 1. Préparation (récupère la largeur et hauteur de la zone rognée)
-    yolo_size = 800 # Mettre 800 si modèle ONNX a été exporté en imgsz=800
-    batch_tensor, camera_ids, (largeur_crop, hauteur_crop) = pretraiter_images(frames, yolo_size)
-    
-    # Le ratio s'applique sur la zone rognée, pas sur l'image complète
-    ratio_x = largeur_crop / yolo_size
-    ratio_y = hauteur_crop / yolo_size
+def _inferer(session: ort.InferenceSession, batch_tensor: np.ndarray) -> np.ndarray:
+    """Lance l'inférence. Si le modèle a été exporté en batch=1, on traite les images une par une."""
+    entree = session.get_inputs()[0]
+    batch_modele = entree.shape[0]
 
-    # 2. Inférence ONNX
-    input_name = session.get_inputs()[0].name
-    outputs = session.run(None, {input_name: batch_tensor})
-    predictions = outputs[0] 
-    
+    if isinstance(batch_modele, int) and batch_modele != len(batch_tensor):
+        if batch_modele == 1:
+            sorties = [session.run(None, {entree.name: batch_tensor[i:i + 1]})[0] for i in range(len(batch_tensor))]
+            return np.concatenate(sorties, axis=0)
+        raise ValueError(f"Le modèle attend un batch de {batch_modele}, reçu {len(batch_tensor)}. "
+                         "Réexporter avec batch=3 ou dynamic=True.")
+
+    return session.run(None, {entree.name: batch_tensor})[0]
+
+
+# --- DÉCODAGE DE LA SORTIE (deux formats possibles selon l'export) ---
+# Les deux décodeurs renvoient un tableau (n, 7) :
+#   [conf_boite, x_tip, y_tip, conf_tip, x_flight, y_flight, conf_flight]
+
+def _normaliser(pred: np.ndarray, debut_keypoints: int) -> np.ndarray:
+    conf = pred[:, 4]
+    kp = pred[:, debut_keypoints:]
+    if kp.shape[1] == 6:    # (x, y, visibilité) par keypoint
+        return np.column_stack((conf, kp))
+    if kp.shape[1] == 4:    # (x, y) par keypoint
+        return np.column_stack((conf, kp[:, 0], kp[:, 1], conf, kp[:, 2], kp[:, 3], conf))
+    raise ValueError(f"Format de sortie YOLO inattendu ({pred.shape[1]} colonnes). "
+                     "Attendu : 2 keypoints (tip, flight).")
+
+
+def _decoder_e2e(pred: np.ndarray, seuil: float) -> np.ndarray:
+    """
+    Export end2end=True (défaut YOLO26) : (300, 6 + keypoints), lignes [x1, y1, x2, y2, conf, classe, kpts...].
+    Le NMS est déjà fait dans le modèle : il ne reste qu'à filtrer sur la confiance.
+    """
+    return _normaliser(pred[pred[:, 4] > seuil], 6)
+
+
+def _decoder_brut(pred: np.ndarray, seuil: float) -> np.ndarray:
+    """
+    Export end2end=False : (4 + 1 + keypoints, 8400), lignes [cx, cy, w, h, conf, kpts...]. NMS à faire ici.
+    """
+    if pred.shape[0] < pred.shape[1]:
+        pred = pred.T
+
+    pred = pred[pred[:, 4] > seuil]
+    if len(pred) == 0:
+        return np.empty((0, 7), dtype=np.float32)
+
+    # NMSBoxes attend [x_haut_gauche, y_haut_gauche, largeur, hauteur]
+    boxes = np.column_stack((pred[:, 0] - pred[:, 2] / 2, pred[:, 1] - pred[:, 3] / 2, pred[:, 2], pred[:, 3]))
+    indices = cv2.dnn.NMSBoxes(boxes.tolist(), pred[:, 4].tolist(), seuil, NMS_IOU)
+    if len(indices) == 0:
+        return np.empty((0, 7), dtype=np.float32)
+
+    return _normaliser(pred[np.array(indices).flatten()], 5)
+
+
+def analyser_batch_yolo(session: ort.InferenceSession, frames: dict[int, cv2.typing.MatLike],
+                        seuil_confiance: float = 0.5) -> dict[int, list[FlechetteDetectee]]:
+
+    taille = _taille_entree(session)
+    batch_tensor, camera_ids, ratios = pretraiter_images(frames, taille)
+    predictions = _inferer(session, batch_tensor)
+
+    # (N, 300, 12) -> export end-to-end ; (N, 11, 8400) -> export brut
+    est_e2e = predictions.shape[1] > predictions.shape[2]
+
     resultats_finaux = {cam_id: [] for cam_id in camera_ids}
 
-    # 3. Post-traitement avec NMS (Suppression des doublons)
     for i, cam_id in enumerate(camera_ids):
-        pred_camera = predictions[i]
-        # Si la forme est (Features, 8400), on transpose en (8400, Features)
-        if pred_camera.shape[0] < pred_camera.shape[1]:
-            pred_camera = np.transpose(pred_camera)
-            
-        nb_colonnes = pred_camera.shape[1]
-        
-        boxes = []
-        confidences = []
-        detections_brutes = []
+        lignes = _decoder_e2e(predictions[i], seuil_confiance) if est_e2e \
+            else _decoder_brut(predictions[i], seuil_confiance)
 
-        for detection in pred_camera:
-            confiance_box = float(detection[4])
-            
-            if confiance_box > seuil_confiance:
-                cx, cy, w, h = detection[0], detection[1], detection[2], detection[3]
-                # Format attendu par NMSBoxes : [x_haut_gauche, y_haut_gauche, largeur, hauteur]
-                x_min = float(cx - w / 2)
-                y_min = float(cy - h / 2)
-                
-                boxes.append([x_min, y_min, float(w), float(h)])
-                confidences.append(confiance_box)
-                detections_brutes.append(detection)
+        ratio_x, ratio_y = ratios[cam_id]
 
-        # Application du NMS pour ne garder qu'UNE seule boîte par fléchette réelle
-        indices_retenus = cv2.dnn.NMSBoxes(boxes, confidences, seuil_confiance, nms_threshold=0.45)
+        for conf_box, x_tip, y_tip, conf_tip, x_flight, y_flight, conf_flight in lignes.tolist():
+            # On remet à l'échelle de la zone rognée, puis on ajoute l'offset du crop
+            # pour retomber sur les vraies coordonnées de l'image 1280x720
+            resultats_finaux[cam_id].append(FlechetteDetectee(
+                confiance_globale=conf_box,
+                x_tip=x_tip * ratio_x + CROP_LEFT,
+                y_tip=y_tip * ratio_y + CROP_TOP,
+                confiance_tip=conf_tip,
+                x_flight=x_flight * ratio_x + CROP_LEFT,
+                y_flight=y_flight * ratio_y + CROP_TOP,
+                confiance_flight=conf_flight,
+            ))
 
-        if len(indices_retenus) > 0:
-            for idx in indices_retenus.flatten():
-                det = detections_brutes[idx]
-                conf_box = float(det[4])
-                
-                # Adaptation automatique selon que YOLO exporte (x, y) ou (x, y, visibilité)
-                if nb_colonnes >= 11:
-                    x_tip_yolo, y_tip_yolo, conf_tip = det[5], det[6], det[7]
-                    x_flight_yolo, y_flight_yolo, conf_flight = det[8], det[9], det[10]
-                elif nb_colonnes == 9:
-                    x_tip_yolo, y_tip_yolo, conf_tip = det[5], det[6], conf_box
-                    x_flight_yolo, y_flight_yolo, conf_flight = det[7], det[8], conf_box
-                else:
-                    raise ValueError(f"Format de sortie YOLO inattendu ({nb_colonnes} colonnes).")
-
-                # On remet à l'échelle de la zone rognée, puis on ajoute l'offset du crop
-                # pour retomber sur les vraies coordonnées de l'image 1280x720
-                flechette = FlechetteDetectee(
-                    confiance_globale=conf_box,
-                    x_tip=float(x_tip_yolo * ratio_x + CROP_LEFT),
-                    y_tip=float(y_tip_yolo * ratio_y + CROP_TOP),
-                    confiance_tip=float(conf_tip),
-                    x_flight=float(x_flight_yolo * ratio_x + CROP_LEFT),
-                    y_flight=float(y_flight_yolo * ratio_y + CROP_TOP),
-                    confiance_flight=float(conf_flight)
-                )
-                resultats_finaux[cam_id].append(flechette)
+        # Meilleure détection en premier
+        resultats_finaux[cam_id].sort(key=lambda f: f.confiance_globale, reverse=True)
 
     return resultats_finaux
-
-
-    # 3. Post-traitement (À ADAPTER SELON LA SORTIE EXACTE DU MODÈLE)
-    for i, cam_id in enumerate(camera_ids):
-        pred_camera = predictions[i] # Forme : (Features, Anchors)
-        pred_camera = np.transpose(pred_camera) # Forme : (Anchors, Features) pour boucler facilement
-        
-        # Pour une vraie implémentation, il faut appliquer un NMS (Non-Maximum Suppression)
-        # Ici, on simule le filtrage basique :
-        for detection in pred_camera:
-            confiance_box = detection[4] # Index à vérifier selon l'export YOLO !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-            
-            if confiance_box > seuil_confiance:
-                # Indices hypothétiques pour YOLO-Pose (tip = kpt1, flight = kpt2)
-                # Remise à l'échelle immédiate
-                x_tip_yolo, y_tip_yolo, conf_tip = detection[5], detection[6], detection[7]
-                x_flight_yolo, y_flight_yolo, conf_flight = detection[8], detection[9], detection[10]
-
-                flechette = FlechetteDetectee(
-                    confiance_globale=float(confiance_box),
-                    x_tip=float(x_tip_yolo * ratio_x),
-                    y_tip=float(y_tip_yolo * ratio_y),
-                    confiance_tip=float(conf_tip),
-                    x_flight=float(x_flight_yolo * ratio_x),
-                    y_flight=float(y_flight_yolo * ratio_y),
-                    confiance_flight=float(conf_flight)
-                )
-                resultats_finaux[cam_id].append(flechette)
-                
-        # TODO: Ajouter cv2.dnn.NMSBoxes ici s'il y a des boîtes en double (fréquent avec YOLO brut)
-
-    return resultats_finaux
-
-
 
 
 # --- ZONE DE TEST ISOLÉE ---
 
 class FauxModeleYOLO:
     """Simule les sorties d'un modèle YOLO-Pose pour tester le code sans fichier .onnx."""
-    
+
     def analyser_simulation(self, frames: dict) -> dict[int, list[FlechetteDetectee]]:
         return {
             # Caméra 1 : fléchette vue de profil (grande distance tip-flight = ~180 px)
@@ -229,20 +214,17 @@ class FauxModeleYOLO:
 
 if __name__ == "__main__":
     print("--- TEST DU FLUX YOLO EN MODE SIMULATION ---")
-    
-    # 1. On vérifie si un vrai modèle existe, sinon on bascule sur la simulation
+
     if CHEMIN_MODELE_DEFAUT.exists():
         print(f"[INFO] Vrai modèle détecté : {CHEMIN_MODELE_DEFAUT}")
         session = charger_modele_yolo(CHEMIN_MODELE_DEFAUT)
-        # Ici on appellerait analyser_batch_yolo(session, fausses_images)
     else:
         print("[INFO] Aucun modèle ONNX trouvé dans models/. Lancement avec le simulateur...")
         fake_model = FauxModeleYOLO()
-        
-        # Données de test
+
         fausses_images = {1: None, 2: None, 3: None}
         resultats = fake_model.analyser_simulation(fausses_images)
-        
+
         for cam_id, flechettes in resultats.items():
             print(f"\nCaméra {cam_id} : {len(flechettes)} fléchette(s) détectée(s)")
             for f in flechettes:
